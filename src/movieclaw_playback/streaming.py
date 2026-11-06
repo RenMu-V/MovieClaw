@@ -45,6 +45,7 @@ from movieclaw_playback.mp4_sample_entry import (
     apply_byte_patches,
     hev1_to_hvc1_patches,
 )
+from movieclaw_playback.local_stream_io import LocalStreamBusy, LocalStreamFile
 from movieclaw_playback.remote_range import LocalRangeFile, RemoteRangeFile
 
 logger = logging.getLogger("movieclaw_playback.streaming")
@@ -321,16 +322,48 @@ class DisconnectAwareFileResponse(FileResponse):
                 },
             }
 
+        pending_start = None
+        started = False
+
         async def tracked_send(message: Message) -> None:
+            nonlocal pending_start, started
+            if (message["type"] == "http.response.start" and scope.get("method") != "HEAD"
+                    and message["status"] in (200, 206)):
+                pending_start = message
+                return
+            if pending_start is not None:
+                await send(pending_start)
+                pending_start = None
+                started = True
             await send(message)
             if message["type"] == "http.response.body" and not message.get("more_body", False):
                 self._completed = True
 
         watcher = asyncio.ensure_future(self._watch_disconnect(receive))
+        serving = asyncio.create_task(super().__call__(scope, receive, tracked_send))
+        disconnected = asyncio.create_task(self._disconnected.wait())
+        stopped = (asyncio.create_task(self._session_stopped.wait())
+                   if self._session_stopped is not None else None)
+        waiters = {serving, disconnected}
+        if stopped is not None:
+            waiters.add(stopped)
         try:
-            await super().__call__(scope, receive, tracked_send)
+            await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
+            if serving.done():
+                await serving
+            else:
+                self._should_stop_reading()
+                serving.cancel()
+                await asyncio.gather(serving, return_exceptions=True)
+        except LocalStreamBusy:
+            if not started:
+                await Response(status_code=503, headers={"Retry-After": "1"})(scope, receive, send)
+            else:
+                raise
         finally:
-            watcher.cancel()
+            for task in (*waiters, watcher):
+                task.cancel()
+            await asyncio.gather(*waiters, watcher, return_exceptions=True)
             if self._probe is not None:
                 self._probe.finish(self._bytes_read, disconnected=self._stopped_early)
             if not self._completed and self._on_disconnect is not None:
@@ -378,7 +411,7 @@ class DisconnectAwareFileResponse(FileResponse):
             return
         if self._should_stop_reading():
             return
-        async with await anyio.open_file(self.path, mode="rb") as file:
+        async with LocalStreamFile(self.path) as file:
             await self._send_span(file, send, 0, None)
 
     async def _handle_single_range(
@@ -399,7 +432,7 @@ class DisconnectAwareFileResponse(FileResponse):
             return
         if self._should_stop_reading():
             return
-        async with await anyio.open_file(self.path, mode="rb") as file:
+        async with LocalStreamFile(self.path) as file:
             await self._send_span(file, send, start, end)
 
     async def _handle_multiple_ranges(
@@ -428,7 +461,7 @@ class DisconnectAwareFileResponse(FileResponse):
             return
         if self._should_stop_reading():
             return
-        async with await anyio.open_file(self.path, mode="rb") as file:
+        async with LocalStreamFile(self.path) as file:
             for start, end in ranges:
                 if self._should_stop_reading():
                     return

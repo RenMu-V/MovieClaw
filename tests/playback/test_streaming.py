@@ -77,7 +77,7 @@ async def test_disconnect_aware_file_response_skips_open_when_client_is_gone(
     await response(_scope(), _receiver(disconnect_after=1), _sender(messages))
 
     # 头已带 Content-Length，不能再补空的结束帧，直接返回让服务器关连接
-    assert [message["type"] for message in messages] == ["http.response.start"]
+    assert messages == []
 
 
 @pytest.mark.asyncio
@@ -124,7 +124,7 @@ async def test_stopped_playback_signal_skips_opening_the_file(
     )
     await response(_scope(), _receive, _sender(messages))
 
-    assert [message["type"] for message in messages] == ["http.response.start"]
+    assert messages == []
 
 
 def test_stop_device_streams_sets_all_active_streams() -> None:
@@ -344,8 +344,7 @@ async def test_stopped_playback_ends_multiple_range_response(tmp_path: Path) -> 
         _sender(messages),
     )
 
-    assert [message["type"] for message in messages] == ["http.response.start"]
-    assert messages[0]["status"] == 206
+    assert messages == []
 
 
 @pytest.mark.asyncio
