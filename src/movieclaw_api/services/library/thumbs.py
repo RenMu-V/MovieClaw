@@ -111,10 +111,13 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
                 .order_by(LibraryFile.file_path)
             )
         ).all()
-        sources = [f for f, lib in rows if lib.generate_thumbnails]
+        # Sidecars are cheap local artwork, not video generation. Keep the owning
+        # library's permission attached to the selected file, never borrow another's.
+        sources = [(f, lib) for f, lib in rows
+                   if lib.generate_thumbnails or Path(f.file_path).suffix.lower() not in IMAGE_EXTS]
         if not sources:
             return
-        file = sources[0]  # 其他库一文件一条目；影视库的临时条目取路径最靠前的文件
+        file, library = sources[0]  # 图片库仍遵循原开关；本地视频总能吸收 sidecar
         from movieclaw_api.services.media_scrape import assets_root
 
         video = Path(file.file_path)
@@ -136,6 +139,7 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
                     duration_seconds=file.duration_seconds,
                     is_disc=file.container in ("bluray", "dvd"),
                     hdr=file.hdr,
+                    allow_video=library.generate_thumbnails,
                 )
             if size is not None:
                 meta.poster_file = poster_rel
@@ -168,6 +172,7 @@ def build_thumbnail(
     duration_seconds: int | None,
     is_disc: bool = False,
     hdr: str | None = None,
+    allow_video: bool = True,
 ) -> tuple[int, int] | None:
     """同步版：按海报 sidecar → 横版 sidecar → 内嵌封面 → 抓帧的顺序产出 ``dest``，
     返回 (宽, 高)。
@@ -184,6 +189,8 @@ def build_thumbnail(
             candidate = find_artwork(video.parent, kind, [video])
             if candidate is not None and _transcode_image(candidate, dest):
                 return _image_size(dest)
+        if not allow_video:
+            return None  # No video probe, embedded cover extraction, or frame decoding.
         cover_index = _attached_pic_index(video)
         if cover_index is not None and _extract_stream(video, cover_index, dest):
             return _image_size(dest)
