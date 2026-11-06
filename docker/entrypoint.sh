@@ -282,7 +282,7 @@ resolve_code() {
     BACKEND_ROOT="$APP_ROOT"
     WEB_ROOT="$APP_ROOT/web"
     local link target version
-    for link in current previous; do
+    for link in $(if [ "${MOVIECLAW_DISABLE_OFFICIAL_UPDATES:-0}" != "1" ]; then printf 'current previous'; fi); do
         target="$UPDATES_DIR/$link"
         [ -e "$target" ] || continue
         version="$(overlay_version_if_valid "$target")"
@@ -316,7 +316,8 @@ resolve_code() {
     # NER 模型指针：data 卷上有完整的模型目录则用它（应用内模型更新），
     # 否则回落镜像内置模型（Dockerfile 的 ENV MOVIECLAW_NER_DIR）
     local model_dir="$DATA_DIR/models/ner/current"
-    if [ -f "$model_dir/model.int8.onnx" ] && [ -f "$model_dir/tokenizer.json" ] \
+    if [ "${MOVIECLAW_DISABLE_OFFICIAL_UPDATES:-0}" != "1" ] \
+        && [ -f "$model_dir/model.int8.onnx" ] && [ -f "$model_dir/tokenizer.json" ] \
         && [ -f "$model_dir/labels.json" ]; then
         MOVIECLAW_NER_DIR="$(readlink -f "$model_dir")"
         export MOVIECLAW_NER_DIR

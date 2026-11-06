@@ -444,6 +444,10 @@ def pending_installs(settings: object) -> list[Any]:
 
 def resume(kernel: Any, settings: object) -> None:
     """后台按原锁文件补装依赖（授权已给过，不再问），装好就挂载；不卡启动。"""
+    import os
+
+    if os.environ.get("MOVIECLAW_DISABLE_PLUGIN_AUTO_INSTALL") == "1":
+        return
     for record in pending_installs(settings):
         current = _progress.get(record.id)
         if current is not None and current.task is not None and not current.task.done():

@@ -105,6 +105,8 @@ def _updates_dir() -> Path:
 
 def _runtime_version() -> int | None:
     """镜像的运行时版本；非 Docker entrypoint 环境（源码部署/开发）为 None。"""
+    if os.environ.get("MOVIECLAW_DISABLE_OFFICIAL_UPDATES") == "1":
+        return None
     raw = os.environ.get("MOVIECLAW_RUNTIME_VERSION", "")
     return int(raw) if raw.isdigit() else None
 
