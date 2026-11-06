@@ -79,6 +79,8 @@ class _Jump:
 
 
 class Config(BaseModel):
+    auto_backfill: bool = Field(default=False, title="自动整库补探", description="默认关闭；手动任务仍可整库补探")
+    on_view: bool = Field(default=True, title="详情按需探测")
     interval_seconds: float = Field(
         default=3.0,
         ge=0.5,
@@ -101,6 +103,10 @@ class _Prefetch:
         self.ops: Any = None
         self.jumps: list[_Jump] = []
         self.running = False
+        self.viewed: dict[tuple, float] = {}
+        self.serial = asyncio.Lock()
+        self.failures = 0
+        self.cooldown_until = 0.0
 
     async def call(self, operation: str, **arguments: Any) -> Any:
         if self.ops is None:
@@ -142,6 +148,8 @@ class _Prefetch:
             await asyncio.sleep(1.0)
 
     async def backfill_if_pending(self) -> None:
+        if not self.config.auto_backfill:
+            return
         try:
             if (await self.pending(1))["items"]:
                 await self.backfill()
@@ -192,26 +200,37 @@ class _Prefetch:
 
     # ------------------------------------------------------------------ 事件
     async def on_files_added(self, event: FilesAdded) -> None:
-        if any(f.strm for f in event.files):
+        if self.config.auto_backfill and any(f.strm for f in event.files):
             await self.backfill()
 
     async def on_playback(self, event: Playback) -> None:
-        if event.unit is not None and event.unit.season > 0:
-            await self.jump(
-                event.media.id,
-                season=event.unit.season,
-                after_episode=event.unit.episode,
-                limit=NEXT_EPISODES,
-                rank=ON_PLAYBACK_RANK,
-            )
+        # Playback itself probes the chosen file; never read ahead on a shared mount.
+        return
 
     async def on_favorite(self, event: ItemFavorite) -> None:
-        await self.jump(
-            event.media.id, season=event.season, limit=ON_FAVORITE, rank=ON_FAVORITE_RANK
-        )
+        return
 
     async def on_viewed(self, event: ItemViewed) -> None:
-        await self.jump(event.media.id, season=event.season, limit=ON_VIEW, rank=ON_VIEW_RANK)
+        if not self.config.on_view or (event.media.kind == "tv" and event.episode is None):
+            return
+        key = (event.media.id, event.season, event.episode)
+        now = time.monotonic()
+        if now - self.viewed.get(key, -3600) < 300:
+            return
+        self.viewed[key] = now
+        if len(self.viewed) > 200:
+            self.viewed.pop(next(iter(self.viewed)))
+        page = await self.pending(1, media_item_id=event.media.id, season=event.season, order="episode")
+        if not page["items"]:
+            return
+        item = page["items"][0]
+        # A series overview has no selected episode: do not guess an episode.
+        if event.season is not None and item.get("episode") != event.episode:
+            return
+        await self.jobs.create(
+            LEGACY_ITEM, input={"file_id": item["file_id"]}, priority=-5,
+            dedupe_key=f"view:{item['file_id']}",
+        )
 
     # ------------------------------------------------------------------ 任务
     async def run_backfill(self, context: Any, data: dict[str, Any]) -> dict[str, Any]:
@@ -256,16 +275,40 @@ class _Prefetch:
         return {"probed": done, "failed": failed, "remaining": "more"}
 
     async def run_legacy_item(self, context: Any, data: dict[str, Any]) -> dict[str, Any]:
-        """升级前排下的插队任务：插队已并进整库补探，直接收尾。"""
-        return {"probed": 0, "targets": 0}
+        """One selected file; legacy item-wide inputs finish without reading."""
+        if "file_id" not in data:
+            return {"probed": 0, "targets": 0}
+        status = await self._probe_quietly(int(data["file_id"]))
+        return {"probed": int(status == "probed"), "status": status, "targets": 1}
 
     async def _probe_quietly(self, file_id: int) -> str:
-        try:
-            return (await self.probe(file_id))["status"]
-        except OpsError as exc:
-            if exc.status == 404:
-                return "missing"  # 文件刚被删了
-            raise
+        async with self.serial:
+            left = self.cooldown_until - time.monotonic()
+            if left > 0:
+                logger.info("probe deferred: circuit cooldown %.0fs", left)
+                raise JobRetry("网盘读取冷却中", delay_seconds=max(60, int(left) + 1))
+            activity = await self.call("playback.activity", scope="all")
+            if activity.get("sessions") or activity.get("downloads") or activity.get("hidden_session_count"):
+                logger.info("probe deferred: MovieClaw playback/download active")
+                raise JobRetry("播放优先，后台探测让行", delay_seconds=60)
+            try:
+                result = await self.probe(file_id)
+            except OpsError as exc:
+                if exc.status == 404:
+                    return "missing"
+                raise
+            status = result["status"]
+            if status == "failed":
+                self.failures += 1
+                error = result.get("error")
+                # Only use the structured HTTP status reported by the real host result.
+                http_status = (error.get("params") or {}).get("status") if isinstance(error, dict) else None
+                if http_status in (403, 429) or self.failures >= 2:
+                    self.cooldown_until = time.monotonic() + 1800
+                    logger.warning("probe circuit open: failures=%s http_status=%s cooldown=1800s", self.failures, http_status)
+            elif status in ("probed", "ready"):
+                self.failures = 0
+            return status
 
     async def _pause(self, context: Any) -> None:
         """两次探测之间歇一会儿；期间取消能及时生效。"""
@@ -286,7 +329,7 @@ class _Prefetch:
     title="网盘规格预探",
     config=Config,
     inject=(HOST_OPS, PLUGIN_JOBS),
-    permissions=("library.strm.list-pending", "library.strm.probe"),
+    permissions=("library.strm.list-pending", "library.strm.probe", "playback.activity"),
     disableable=True,
     reloadable=True,
 )

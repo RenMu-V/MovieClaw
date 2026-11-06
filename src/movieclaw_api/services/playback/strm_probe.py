@@ -253,7 +253,7 @@ async def _failure_reason(source: StrmLink | Path) -> dict:
     if isinstance(source, Path):
         return reference("player.strm.mountUnreadable")
     status = await asyncio.to_thread(strm_link_status, source)
-    if status in (401, 403, 404, 410):
+    if status in (401, 403, 404, 410, 429):
         return reference("player.strm.linkExpired", status=status)
     return reference("player.strm.linkUnreadable")
 

@@ -2,7 +2,7 @@
 id = "strm-prefetch"
 title = "网盘规格预探"
 title_localized = { en = "Cloud media specification checks" }
-version = "1.0.1"
+version = "1.0.2"
 entry = "strm_prefetch"
 runtime = "process"
 sdk = "^1.0"
@@ -14,6 +14,6 @@ description_localized = { en = "Check cloud (STRM) media formats, audio tracks a
 "plugin-jobs" = "^1.0"
 
 [permissions]
-operations = ["library.strm.list-pending", "library.strm.probe"]
+operations = ["library.strm.list-pending", "library.strm.probe", "playback.activity"]
 # 看到下一集、收藏、打开详情时优先探：要订这几个敏感事件（谁在什么时候看了什么）
 events = ["playback.started", "library.item.favorited", "library.item.viewed"]

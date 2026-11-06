@@ -32,6 +32,8 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("SITE_CONFIGS_DIR", str(tmp_path / "site-configs"))
     monkeypatch.setenv("MOVIECLAW_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SCHEDULER_ENABLED", "false")
+    from movieclaw_playback import activity
+    activity.reset()
     get_settings.cache_clear()
     durable_events.reset_state()
     probed: list[str] = []
@@ -170,7 +172,7 @@ def test_backfills_pending_files_and_skips_slow_formats(env) -> None:
 
         ids = client.portal.call(lambda: seed(tmp / "media", 3))
         # 改设置会按新设置重启插件：启动时发现有待探的，排一轮补探
-        configure(client, interval_seconds=0.5)
+        configure(client, interval_seconds=0.5, auto_backfill=True)
         wait_for(lambda: len(probed) == 3)
         wait_for(lambda: [j["status"] for j in jobs_of(client, f"{ID}:backfill")] == ["succeeded"])
         [job] = jobs_of(client, f"{ID}:backfill")
@@ -198,7 +200,7 @@ def test_playback_jumps_the_queue_for_the_next_episodes(env) -> None:
     with client:
         ids = client.portal.call(lambda: seed(tmp / "media", 6))
         # 整库补探新入库的在前：先探第 6 集，歇一个间隔；这时播第 3 集 → 第 4、5 集插到前面
-        configure(client, interval_seconds=3)
+        configure(client, interval_seconds=3, auto_backfill=True)
         wait_for(lambda: len(probed) == 1)
         assert probed[0] == "https://pan.example.com/e6.mkv"
         # 重复上报、随后打开详情都只记插队请求，不建任务；详情的插队排在播放的下一集后面
@@ -206,11 +208,11 @@ def test_playback_jumps_the_queue_for_the_next_episodes(env) -> None:
         start_playback(client, ids["show"], 3)
         for _ in range(5):
             client.get(f"/api/v1/libraries/{ids['library']}/items/{ids['show']}")
-        wait_for(lambda: len(probed) == 3)
-        assert probed[1:] == ["https://pan.example.com/e4.mkv", "https://pan.example.com/e5.mkv"]
+        time.sleep(4)
+        assert len(probed) == 1, "active playback must stop new background probes"
         assert jobs_of(client, f"{ID}:item") == []
         [backfill] = jobs_of(client, f"{ID}:backfill")
-        assert backfill["status"] == "running"
+        assert backfill["status"] in ("running", "retry_wait", "pending", "queued")
 
 
 def test_disable_uninstall_and_restore(env) -> None:
@@ -219,7 +221,7 @@ def test_disable_uninstall_and_restore(env) -> None:
     with client:
         kernel = app.state.kernel
         ids = client.portal.call(lambda: seed(tmp / "media", 4))
-        configure(client, interval_seconds=30)
+        configure(client, interval_seconds=30, auto_backfill=True)
         wait_for(lambda: len(probed) == 1)
 
         reply = client.put(f"/api/v1/app/plugins/{ID}/enabled", json={"enabled": False})
@@ -245,5 +247,5 @@ def test_disable_uninstall_and_restore(env) -> None:
         # 恢复：接着补探剩下的
         configure_after = client.post(f"/api/v1/app/plugins/{ID}/bundled/restore")
         assert configure_after.status_code == 200, configure_after.text
-        configure(client, interval_seconds=0.5)
+        configure(client, interval_seconds=0.5, auto_backfill=True)
         wait_for(lambda: len(set(probed)) == 4)
