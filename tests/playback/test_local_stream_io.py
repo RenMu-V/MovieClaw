@@ -116,3 +116,35 @@ async def _blocked_read_retries(tmp_path, monkeypatch):
     assert all(f.closed for f in files)
     assert len(reads) == 2, 'stopped readers must never issue another read'
 
+
+def test_multipart_waits_for_readable_bytes(tmp_path, monkeypatch):
+    asyncio.run(_multipart_waits(tmp_path, monkeypatch))
+
+
+async def _multipart_waits(tmp_path, monkeypatch):
+    from movieclaw_playback.local_stream_io import LocalStreamFile
+    path = tmp_path / 'multi.mp4'
+    path.write_bytes(b'0123456789')
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    real_read = LocalStreamFile.read
+    async def blocked_read(self, size):
+        entered.set()
+        await release.wait()
+        return await real_read(self, size)
+    monkeypatch.setattr(LocalStreamFile, 'read', blocked_read)
+    messages = []
+    async def receive():
+        await asyncio.Event().wait()
+    async def send(message):
+        messages.append(message)
+    task = asyncio.create_task(DisconnectAwareFileResponse(path)(
+        {'type': 'http', 'method': 'GET', 'headers': [(b'range', b'bytes=0-1,8-9')],
+         'extensions': {}}, receive, send))
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        assert messages == [], 'multipart preamble is not proof media is readable'
+    finally:
+        release.set()
+        await asyncio.wait_for(task, 2)
+

@@ -465,6 +465,8 @@ class DisconnectAwareFileResponse(FileResponse):
             for start, end in ranges:
                 if self._should_stop_reading():
                     return
+                await file.seek(start)
+                first_chunk = await file.read(min(self.chunk_size, end - start))
                 await send(
                     {
                         "type": "http.response.body",
@@ -472,11 +474,15 @@ class DisconnectAwareFileResponse(FileResponse):
                         "more_body": True,
                     }
                 )
-                await file.seek(start)
                 while start < end:
                     if self._should_stop_reading():
                         return
-                    chunk = await file.read(min(self.chunk_size, end - start))
+                    if first_chunk is not None:
+                        chunk, first_chunk = first_chunk, None
+                    else:
+                        chunk = await file.read(min(self.chunk_size, end - start))
+                    if not chunk:
+                        raise OSError("Unexpected end of media file")
                     if self._probe is not None:
                         self._probe.first_chunk()
                     self._bytes_read += len(chunk)
