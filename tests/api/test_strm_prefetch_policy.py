@@ -61,6 +61,12 @@ async def test_real_http_status_opens_circuit_immediately(status):
     assert p.probe.await_count == 1
 
 
+def test_probe_api_preserves_machine_readable_failure():
+    from movieclaw_api.api.routes.library_strm import StrmProbeView
+    reason = {"message_key": "player.strm.linkExpired", "params": {"status": 429}}
+    assert StrmProbeView(file_id=1, status="failed", error_ref=reason).model_dump()["error_ref"] == reason
+
+
 @pytest.mark.asyncio
 async def test_favorite_and_playback_never_prefetch_other_files():
     p = scheduler()

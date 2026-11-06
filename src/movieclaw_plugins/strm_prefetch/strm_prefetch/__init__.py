@@ -300,7 +300,7 @@ class _Prefetch:
             status = result["status"]
             if status == "failed":
                 self.failures += 1
-                error = result.get("error")
+                error = result.get("error_ref") or result.get("error")
                 # Only use the structured HTTP status reported by the real host result.
                 http_status = (error.get("params") or {}).get("status") if isinstance(error, dict) else None
                 if http_status in (403, 429) or self.failures >= 2:

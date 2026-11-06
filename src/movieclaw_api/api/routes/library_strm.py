@@ -54,6 +54,7 @@ class StrmProbeView(BaseModel):
         "backoff：还在失败退避期没探；not_strm：不是网盘条目"
     )
     error: str | None = Field(default=None, description="没探成的原因")
+    error_ref: dict | None = Field(default=None, description="原始结构化错误（不推断挂载层 HTTP 状态）")
     next_retry_at: datetime | None = Field(default=None, description="失败退避到什么时候")
     container: str | None = None
     video_codec: str | None = None
@@ -188,6 +189,7 @@ async def probe(
             file_id=file_id,
             status=result.status,  # type: ignore[arg-type]
             error=render_value(result.error) if result.error else None,
+            error_ref=result.error if isinstance(result.error, dict) else None,
             next_retry_at=result.next_retry_at,
             container=row.container if row is not None else None,
             video_codec=row.video_codec if row is not None else None,
