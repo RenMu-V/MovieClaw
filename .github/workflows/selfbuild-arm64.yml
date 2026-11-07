@@ -1,0 +1,69 @@
+name: selfbuild-arm64
+
+on:
+  workflow_dispatch:
+    inputs:
+      push_to_registries:
+        description: 'Push to Docker Hub and GHCR'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Policy checks
+        run: |
+          python tests/selfbuild_policy_test.py
+          bash -n docker/entrypoint.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (native ARM64)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          shm-size: 2g
+          push: true
+          tags: |
+            ghcr.io/renmu-v/movieclaw:arm64-latest
+            ghcr.io/renmu-v/movieclaw:arm64-${{ github.sha }}
+            shenmu/movieclaw:arm64-latest
+            shenmu/movieclaw:arm64-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/RenMu-V/MovieClaw
+            org.opencontainers.image.revision=${{ github.sha }}
+            de.sttss.movieclaw.base_revision=8e0a58a3c21e2470faa3dfbda8aa2980ab819377
+
+      - name: Verify pushed image
+        env:
+          IMAGE: ghcr.io/renmu-v/movieclaw@${{ steps.build.outputs.digest }}
+        run: |
+          docker pull "$IMAGE"
+          docker run --rm --entrypoint /entrypoint.sh "$IMAGE" resolve
+          docker run --rm --entrypoint /usr/local/bin/movieclaw-subtitle-smoke-test "$IMAGE"
+          echo "GHCR: $IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          echo "DockerHub: shenmu/movieclaw:arm64-${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
