@@ -121,6 +121,11 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
         from movieclaw_api.services.media_scrape import assets_root
 
         video = Path(file.file_path)
+        # STRM files: strip .strm suffix before searching for sidecars.
+        # p115 plugin generates sidecar files as "video_name-poster.jpg",
+        # not "video_name.mp4-poster.jpg", so we must normalize .strm paths.
+        if video.suffix.lower() == ".strm":
+            video = video.with_suffix("")
         item_dir = assets_root() / str(media_item_id)
         poster_dest, backdrop_dest = item_dir / "poster.jpg", item_dir / "backdrop.jpg"
         poster_rel = str(poster_dest.relative_to(assets_root()))
