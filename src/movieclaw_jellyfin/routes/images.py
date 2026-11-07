@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import mimetypes
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Body, Request, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -380,6 +381,82 @@ async def get_item_image(
 
     target, media_type = await _maybe_scaled(target, request)
     return FileResponse(target, media_type=media_type, headers=headers)
+
+
+@router.post("/Items/{item_id}/Images/{image_type}")
+async def post_item_image(
+    request: Request, item_id: str, image_type: str
+) -> Response:
+    """POST /Items/{item_id}/Images/Primary 用图片替换 ITEM 类型的主封面。
+    
+    仅支持 ITEM 类型的 Primary 封面；接收图片二进制（raw bytes），验证 mime 类型为
+    image/*，保存到 /app/data/metadata/images/{media_item_id}/poster.jpg，更新
+    media_metadata.poster_file 字段，返回 204。
+    
+    Episode/Season/Library 等类型不支持 → 405 或 501。
+    """
+    # 仅支持 Primary 封面，仅支持 ITEM 类型
+    itype = image_type.lower()
+    if itype != "primary":
+        raise JellyfinError(405, text=f"Method Not Allowed for image type {image_type}")
+    
+    ref = decode_guid(item_id)
+    if ref is None:
+        raise not_found()
+    
+    if ref.kind != EntityKind.ITEM:
+        # Episode/Season/Library 等类型暂不支持
+        raise JellyfinError(501, text=f"Image upload not implemented for {ref.kind.name}")
+    
+    # 读取请求体为图片字节
+    content_type = request.headers.get("content-type", "").lower()
+    if not content_type.startswith("image/"):
+        raise JellyfinError(400, text="Content-Type must be image/*")
+    
+    image_bytes = await request.body()
+    if not image_bytes:
+        raise JellyfinError(400, text="Empty request body")
+    
+    # 验证是否为合法图片格式（通过 PIL）
+    from PIL import Image as PILImage
+    
+    try:
+        test_img = PILImage.open(io.BytesIO(image_bytes))
+        test_img.load()  # force loading to validate
+    except Exception:
+        raise JellyfinError(400, text="Invalid image format")
+    
+    # 保存图片到 /app/data/metadata/images/{media_item_id}/poster.jpg
+    from movieclaw_api.services.media_scrape import assets_root
+    
+    media_item_id = ref.entity_id
+    poster_dir = assets_root() / str(media_item_id)
+    poster_dir.mkdir(parents=True, exist_ok=True)
+    poster_path = poster_dir / "poster.jpg"
+    
+    # 保存为 JPEG（统一格式，即使上传的是其他格式）
+    img = test_img.convert("RGB")
+    img.save(poster_path, "JPEG", quality=90)
+    
+    # 更新 media_metadata.poster_file 字段
+    rel_path = f"{media_item_id}/poster.jpg"
+    async with get_database().session() as session:
+        meta = (
+            await session.execute(
+                select(MediaMetadata).where(
+                    MediaMetadata.media_item_id == media_item_id
+                )
+            )
+        ).scalar_one_or_none()
+        
+        if meta is None:
+            raise JellyfinError(404, text="Item not found")
+        
+        meta.poster_file = rel_path
+        session.add(meta)
+        await session.commit()
+    
+    return Response(status_code=204)
 
 
 _SCALE_PARAMS = ("maxWidth", "maxHeight", "width", "height", "fillWidth", "fillHeight")
