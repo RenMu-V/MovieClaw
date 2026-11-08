@@ -149,6 +149,16 @@ PROFILES: dict[tuple[str, str], LibraryProfile] = {
     ),
 }
 
+# Local metadata is an identity source, not a different media shape. Keep the
+# Movie projection while reusing the NFO/sidecar-only scanning capabilities.
+PROFILES[("movie", MediaSource.LOCAL)] = replace(
+    PROFILES[("video", MediaSource.LOCAL)],
+    kind=MediaKind.MOVIE,
+    jellyfin_type="Movie",
+    jellyfin_collection="movies",
+    default_aspect=_POSTER,
+)
+
 PROFILES[("mixed", MediaSource.TMDB)] = replace(
     PROFILES[("movie", MediaSource.TMDB)],
     kind=LibraryKind.MIXED,

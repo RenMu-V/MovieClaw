@@ -47,7 +47,7 @@ class MediaLibraryService:
     def __init__(
         self,
         session: AsyncSession,
-        tmdb_client: TmdbClient,
+        tmdb_client: TmdbClient | None,
         *,
         languages: Sequence[str] | None = None,
         scrape_library_id: int | None = None,

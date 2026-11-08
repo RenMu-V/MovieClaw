@@ -166,9 +166,10 @@ def test_profile_table_is_capability_driven() -> None:
     )
     assert video.jellyfin_collection == "homevideos" and video.jellyfin_type == "Video"
     assert profile_for(MediaKind.MOVIE).source == MediaSource.TMDB
-    # 没有识别策略的组合直接拒绝，而不是建出一个半残的库
+    assert profile_for(MediaKind.MOVIE, "local").jellyfin_type == "Movie"
+    # Combinations without an implemented strategy still fail validation.
     with pytest.raises(BadRequestException, match="不支持"):
-        profile_for(MediaKind.MOVIE, "local")
+        profile_for(MediaKind.PHOTO, "tmdb")
 
 
 async def test_create_video_library_defaults_to_local_source(db, tmp_path) -> None:
@@ -533,7 +534,7 @@ async def test_movie_library_unidentified_file_gets_provisional_item(
         fresh = await session.get(Library, library.id)
         assert fresh.stats_item_count == 0 and fresh.stats_unidentified_count == 1
         # 影视库里的临时条目按 TMDB 海报惯例出 2:3 占位（没有抓帧尺寸时）
-        assert primary_aspect(item, None, None) == pytest.approx(16 / 9, abs=1e-3)
+        assert primary_aspect(item, None, None) == pytest.approx(2 / 3, abs=1e-3)
 
 
 # ---------------------------------------------------------------------------
