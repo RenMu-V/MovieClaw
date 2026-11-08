@@ -882,7 +882,7 @@ function rowFetches(
 /** 海报卡的 id：TMDB 条目用 tmdb_id（订阅状态按它对齐），本地条目没有外部 id，
  *  用带前缀的条目 id 占位——只用来当 Map 键与 React key，不会被当成 TMDB id 请求。 */
 export function libraryItemKey(item: LibraryItem): string {
-  return item.tmdb_id != null ? String(item.tmdb_id) : `local:${item.media_item_id}`;
+  return item.tmdb_id != null ? `${item.kind}:${item.tmdb_id}` : `local:${item.media_item_id}`;
 }
 
 export function libraryItemToMediaItem(item: LibraryItem, locale?: AppLocale): MediaItem {
