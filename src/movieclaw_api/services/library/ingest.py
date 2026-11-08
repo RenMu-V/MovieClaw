@@ -1776,8 +1776,32 @@ async def _ingest_entry(
             )
         return saved
 
-    # kind 先验：指定库取库类型；auto 规则取规则声明（识别链按 movie/tv 分叉）
-    kind = MediaKind(library.kind if library is not None else rule.kind)
+    # mixed is a container, never a TMDB namespace. Prefer pinned acquisition
+    # identity; otherwise require the scanner's strong local NFO/episode evidence.
+    if library is not None and library.kind == "mixed":
+        from movieclaw_api.services.library.scan import _mixed_entry_kind
+
+        pinned = forced_item or recognized_item
+        if pinned is None and record is not None and record.claimed_kind:
+            kind = MediaKind(record.claimed_kind)
+        else:
+            if pinned is None:
+                hint = await acquisition.current().identity_hint(session, matched_hashes or [])
+                pinned = hint.item if hint else None
+            kinds = {
+                concrete
+                for file in (*snap.videos, *snap.disc_roots)
+                if (concrete := _mixed_entry_kind(
+                    watch_root, file, is_disc=file in snap.disc_roots
+                )) is not None
+            }
+            kind = MediaKind(pinned.kind) if pinned else (next(iter(kinds)) if len(kinds) == 1 else None)
+        if kind not in (MediaKind.MOVIE, MediaKind.TV):
+            return await conclude(
+                IngestStatus.PENDING, reference("library.ingest.unidentified", name=entry.name)
+            )
+    else:
+        kind = MediaKind(library.kind if library is not None else rule.kind)
 
     # 本地内容形态（「其他」，docs/design/library-other-kind.md 4.6 节）：不识别、
     # 不改名，条目原样落盘——指定库落库主根并逐视频建本地条目；auto 规则没有

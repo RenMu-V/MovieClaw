@@ -138,6 +138,13 @@ async def test_watch_import_mixed_no_hardlink_same_disk_check(db, tmp_path, monk
         
         svc = ImportWatchConfigService(session)
         
+        original_stat = __import__('os').stat
+        from types import SimpleNamespace
+        def disk_stat(path, *args, **kwargs):
+            if str(path) in ("/strm/mixed", "/video/downloads"):
+                return SimpleNamespace(st_dev=1 if str(path) == "/strm/mixed" else 2)
+            return original_stat(path, *args, **kwargs)
+        monkeypatch.setattr("os.stat", disk_stat)
         # hardlink 到跨盘库应该被拒绝
         with pytest.raises(BadRequestException) as exc:
             await svc.create(
@@ -145,7 +152,7 @@ async def test_watch_import_mixed_no_hardlink_same_disk_check(db, tmp_path, monk
                 strategy="hardlink",
                 library_id=mixed.id,
             )
-        assert "同盘" in str(exc.value) or "cross" in str(exc.value).lower()
+        assert "文件系统" in str(exc.value) or "filesystem" in str(exc.value).lower()
 
 
 @pytest.mark.asyncio

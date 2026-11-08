@@ -141,7 +141,10 @@ def _hit_reason_message(kind: str, library: Library, facts: RoutingFacts) -> dic
 async def route(session: AsyncSession, kind: str, facts: RoutingFacts | None) -> RouteDecision:
     """按收藏范围选库；不命中落该 kind 默认库。永不抛出。"""
     repo = LibraryRepository(session)
-    declared = [lib for lib in await repo.list_all(kind=kind) if lib.match_rules]
+    candidates = await repo.list_all(kind=kind)
+    if kind in ("movie", "tv"):
+        candidates += await repo.list_all(kind="mixed")
+    declared = [lib for lib in candidates if lib.match_rules]
     hits = [lib for lib in declared if evaluate(lib.match_rules, facts)]
     if hits:
         # 特异性（条件条数）优先，打平取 id 小者（创建早优先）

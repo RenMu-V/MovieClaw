@@ -149,14 +149,16 @@ async def test_subscription_dispatch_preview_mixed_explicit(db) -> None:
         svc = _service(session)
 
         # 为电影调用 dispatch-preview，指定 mixed 库
-        preview = await svc.preview_download_routing(
-            "movie", lib_ids["mixed"], tmdb_id=550
+        from movieclaw_api.services.subscription.dispatch import preview_dispatch_route
+        preview = await preview_dispatch_route(
+            session, kind="movie", library_id=lib_ids["mixed"], tmdb_id=550,
+            title="Fight Club", year=1999,
         )
 
-        assert preview.library_id == lib_ids["mixed"]
-        assert preview.ok is True
+        assert preview["library_id"] == lib_ids["mixed"]
+        assert preview["entry_dir"] == "/media/mixed/movie/Fight Club (1999)"
         # route_matched 应为 null（显式选库不走路由）
-        assert preview.route_matched is None
+        assert preview["route_matched"] is None
 
 
 @pytest.mark.asyncio
@@ -167,7 +169,7 @@ async def test_subscription_kind_mismatch_with_movie_library_rejected(db) -> Non
         svc = _service(session)
 
         # 剧集订阅选 movie 库应拒绝
-        from movieclaw_api.core.exceptions import BadRequestException
+        from movieclaw_api.exceptions import BadRequestException
         with pytest.raises(BadRequestException):
             await svc.create(MediaKind.TV, 1, selected_seasons=[1], library_id=lib_ids["movie"])
 
@@ -180,6 +182,6 @@ async def test_subscription_kind_mismatch_with_tv_library_rejected(db) -> None:
         svc = _service(session)
 
         # 电影订阅选 tv 库应拒绝
-        from movieclaw_api.core.exceptions import BadRequestException
+        from movieclaw_api.exceptions import BadRequestException
         with pytest.raises(BadRequestException):
             await svc.create(MediaKind.MOVIE, 550, library_id=lib_ids["tv"])
