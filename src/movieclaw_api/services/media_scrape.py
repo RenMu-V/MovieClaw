@@ -2164,7 +2164,7 @@ async def _media_dir_lookup(session: AsyncSession, item: MediaItem, seasons) -> 
     videos: list[Path] = []
     episode_videos: dict[str, list[Path]] = {}
     for file, library in rows:
-        if library.kind != item.kind:
+        if library.kind not in (item.kind, "mixed"):
             continue
         video = Path(file.file_path)
         videos.append(video)
