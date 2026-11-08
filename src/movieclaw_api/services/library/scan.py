@@ -4004,6 +4004,13 @@ async def _collect_and_prefetch(
         ):
             continue
         nfo = _entry_nfo(kind, root_path, file)
+        if kind is MediaKind.MOVIE:
+            local = await asyncio.to_thread(
+                build_local_identity, library_id=0, kind=kind, root=root_path,
+                file=file, spec=None, evidence=None, is_disc=_is_disc, scraped=True,
+            )
+            if local.from_nfo:
+                continue
         tmdb_id, source = pinned_tmdb_id(kind, root_path, file, nfo=nfo)
         if tmdb_id is not None and source is not None:
             wanted.add(tmdb_id)
@@ -4324,6 +4331,16 @@ async def _identify_with_fallback(
     evidence: LocalEvidence | None = None
     if spec is not None:
         duration_seconds = spec.duration_seconds
+    # A complete local movie record is a successful identity, not a failed
+    # TMDB search. Do not send catalogue numbers or unrelated folder IDs online.
+    if kind is MediaKind.MOVIE and not is_disc:
+        identity = await asyncio.to_thread(
+            build_local_identity, library_id=library.id, kind=kind, root=root,
+            file=file, spec=spec, evidence=None, is_disc=False, scraped=True,
+        )
+        if identity.from_nfo:
+            item = await media_service.ensure_local_item(kind, identity, library_id=library.id)
+            return _Identified(item=item, source=IdentitySource.NFO)
     if profile.scraped:
         identified = await _identify(
             media_service,

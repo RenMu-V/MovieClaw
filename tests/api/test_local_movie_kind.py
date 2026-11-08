@@ -42,3 +42,24 @@ async def test_local_movie_scan_without_tmdb_even_with_generic_nfo_id(db,tmp_pat
     await scan_mod.scan_library(lib.id)
     async with db.session() as s:
         assert {i.external_id for i in (await s.execute(select(MediaItem))).scalars()}==stable
+
+async def test_tmdb_movie_accepts_valid_local_nfo_as_identified(db,tmp_path,monkeypatch):
+    import httpx
+    from movieclaw_media.tmdb import TmdbClient
+    root=tmp_path/'nfo-first';root.mkdir()
+    (root/'ABC-456.strm').write_text('https://invalid.example/movie')
+    (root/'ABC-456.nfo').write_text('<movie><title>NFO Movie</title><plot>Authoritative local plot</plot><actor><name>Actor B</name></actor></movie>')
+    async with db.session() as s:
+        lib=await LibraryConfigService(s).create(name='Movie NFO first',kind=MediaKind.MOVIE,root_paths=[str(root)],generate_thumbnails=False,detect_media_segments=False)
+    def fail(request):raise AssertionError('valid local NFO must not request TMDB')
+    monkeypatch.setattr(scan_mod,'get_tmdb_client',lambda:TmdbClient('key',transport=httpx.MockTransport(fail)))
+    result=await scan_mod.scan_library(lib.id)
+    assert not result.errors and result.identified==1 and result.unidentified==0
+    async with db.session() as s:
+        row=(await s.execute(select(LibraryFile))).scalar_one()
+        assert row.unidentified_code is None and row.identity_source=='nfo'
+        item=await s.get(MediaItem,row.media_item_id)
+        assert item.kind=='movie' and item.source=='local' and item.title=='NFO Movie'
+        from movieclaw_db.models import Library
+        fresh=await s.get(Library,lib.id)
+        assert fresh.stats_unidentified_count==0 and fresh.stats_item_count==1
