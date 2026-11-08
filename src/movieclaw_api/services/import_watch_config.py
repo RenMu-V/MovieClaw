@@ -228,10 +228,7 @@ class ImportWatchConfigService:
                 raise NotFoundException(
                     message_key="errors.importWatch.libraryMissing", params={"id": library_id}
                 )
-            if library.kind == "mixed":
-                raise BadRequestException(
-                    message_key="errors.library.kindUnsupported", params={"kind": "mixed"}
-                )
+            # mixed 库支持 watch 导入（其中包含 movie/tv 两种内容）
             if not library.primary_root:
                 raise BadRequestException(
                     message_key="errors.importWatch.libraryRootMissing",

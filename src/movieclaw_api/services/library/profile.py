@@ -152,7 +152,7 @@ PROFILES: dict[tuple[str, str], LibraryProfile] = {
 PROFILES[("mixed", MediaSource.TMDB)] = replace(
     PROFILES[("movie", MediaSource.TMDB)],
     kind=LibraryKind.MIXED,
-    subscribable=False,
+    subscribable=True,
     jellyfin_collection="",
 )
 

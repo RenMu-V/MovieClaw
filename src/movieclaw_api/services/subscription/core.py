@@ -1944,7 +1944,7 @@ class SubscriptionService:
         return await LibraryFileRepository(self._session).owned_units(media_item_id)
 
     async def _validate_library(self, kind: str, library_id: int) -> Library:
-        """校验目标库存在且类型匹配（电影订阅只能入电影库，剧集同理）。"""
+        """校验目标库存在且类型匹配（电影订阅只能入电影库，剧集同理，mixed 库接受 movie/tv）。"""
         row = await LibraryRepository(self._session).get(library_id)
         if row is None:
             raise BadRequestException(
@@ -1952,7 +1952,8 @@ class SubscriptionService:
             )
         from movieclaw_api.services.library.profile import profile_of
 
-        if row.kind != kind:
+        # mixed 库接受 movie/tv 两种订阅；其他库要求严格类型匹配
+        if row.kind != kind and row.kind != "mixed":
             raise BadRequestException(
                 message_key="errors.subscription.libraryKindMismatch",
                 params={"name": row.name, "kind": kind_reference(row.kind)},

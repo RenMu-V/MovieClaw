@@ -121,3 +121,33 @@ async def test_copy_strategy_skips_disk_check(db, two_disks):
             source_path="/video/MP", strategy="copy", library_id=None, kind="movie"
         )
         assert rule.id is not None
+
+
+# Tests for mixed library watch import support
+async def test_watch_import_explicit_mixed_library(db):
+    """监听导入支持显式选择 mixed 库作为目标（取代之前的拒绝）。"""
+    await _make_library(db, name="混合库", root="/media/mixed", kind="mixed")
+    async with db.session() as session:
+        rule = await ImportWatchConfigService(session).create(
+            source_path="/downloads/completed",
+            strategy="hardlink",
+            library_id=(await LibraryRepository(session).get_by_name("混合库")).id,
+        )
+        assert rule.id is not None
+        assert rule.library_id is not None
+
+
+async def test_watch_import_mixed_library_invalid_root(db):
+    """mixed 库无 root_path 时仍应拒绝（库维度的约束）。"""
+    import sqlalchemy as sa
+    
+    async with db.session() as session:
+        repo = LibraryRepository(session)
+        mixed = await repo.create(name="根缺失混合库", kind="mixed", root_paths=[])
+        with pytest.raises(BadRequestException) as exc:
+            await ImportWatchConfigService(session).create(
+                source_path="/downloads/completed",
+                strategy="hardlink",
+                library_id=mixed.id,
+            )
+    assert "根缺失混合库" in str(exc.value)
