@@ -4172,6 +4172,13 @@ def _mixed_entry_kind(root: Path, file: Path, *, is_disc: bool = False) -> Media
         # Relaxed regex: no word boundary (\b)  to handle CJK, punctuation like "S01E01"
         if re.search(r"(?i)S\d{1,3}E\d{1,4}", file.stem):
             return MediaKind.TV
+        # Check for TV sidecar artwork (poster, fanart, Cover) indicating episodes
+        sidecar_dir = file.parent
+        for artwork in ["Cover.jpg", "poster.jpg", "fanart.jpg"]:
+            if (sidecar_dir / artwork).exists():
+                # If artwork exists and filename suggests episodes, likely TV
+                if re.search(r"(?i)S\d{1,3}E\d{1,4}", file.stem):
+                    return MediaKind.TV
     return None
 
 
