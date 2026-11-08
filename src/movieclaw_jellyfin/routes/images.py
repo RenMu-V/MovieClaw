@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import io
 import mimetypes
 from pathlib import Path
 
-from fastapi import APIRouter, Body, Request, UploadFile, File
+from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -384,78 +383,69 @@ async def get_item_image(
 
 
 @router.post("/Items/{item_id}/Images/{image_type}")
-async def post_item_image(
-    request: Request, item_id: str, image_type: str
+@router.post("/Items/{item_id}/Images/{image_type}/{image_index}")
+async def post_library_image(
+    request: Request, item_id: str, image_type: str, image_index: int = 0
 ) -> Response:
-    """POST /Items/{item_id}/Images/Primary 用图片替换 ITEM 类型的主封面。
-    
-    仅支持 ITEM 类型的 Primary 封面；接收图片二进制（raw bytes），验证 mime 类型为
-    image/*，保存到 /app/data/metadata/images/{media_item_id}/poster.jpg，更新
-    media_metadata.poster_file 字段，返回 204。
-    
-    Episode/Season/Library 等类型不支持 → 405 或 501。
+    """Administrator-only library cover; native durable storage and cache tags.
+
+    Jellyfin sends base64 under image/*; accept raw image bytes too for Emby
+    clients. Media-item uploads intentionally remain unsupported.
     """
-    # 仅支持 Primary 封面，仅支持 ITEM 类型
-    itype = image_type.lower()
-    if itype != "primary":
-        raise JellyfinError(405, text=f"Method Not Allowed for image type {image_type}")
-    
+    import base64
+    import binascii
+
+    from movieclaw_api.services.library.cover import (
+        MAX_UPLOAD_BYTES,
+        normalize_cover_image,
+        save_custom_cover,
+    )
+    from movieclaw_jellyfin.security import require_device
+
+    identity = await require_device(request)
+    if identity.device.member_id != 0:
+        raise JellyfinError(403, text="Administrator required")
     ref = decode_guid(item_id)
     if ref is None:
         raise not_found()
-    
-    if ref.kind != EntityKind.ITEM:
-        # Episode/Season/Library 等类型暂不支持
-        raise JellyfinError(501, text=f"Image upload not implemented for {ref.kind.name}")
-    
-    # 读取请求体为图片字节
-    content_type = request.headers.get("content-type", "").lower()
-    if not content_type.startswith("image/"):
-        raise JellyfinError(400, text="Content-Type must be image/*")
-    
-    image_bytes = await request.body()
-    if not image_bytes:
-        raise JellyfinError(400, text="Empty request body")
-    
-    # 验证是否为合法图片格式（通过 PIL）
-    from PIL import Image as PILImage
-    
+    if ref.kind != EntityKind.LIBRARY:
+        raise JellyfinError(501, text="Image upload only implemented for libraries")
+    if image_type.lower() != "primary":
+        raise JellyfinError(405, text="Only Primary cover is supported")
     try:
-        test_img = PILImage.open(io.BytesIO(image_bytes))
-        test_img.load()  # force loading to validate
-    except Exception:
-        raise JellyfinError(400, text="Invalid image format")
-    
-    # 保存图片到 /app/data/metadata/images/{media_item_id}/poster.jpg
-    from movieclaw_api.services.media_scrape import assets_root
-    
-    media_item_id = ref.entity_id
-    poster_dir = assets_root() / str(media_item_id)
-    poster_dir.mkdir(parents=True, exist_ok=True)
-    poster_path = poster_dir / "poster.jpg"
-    
-    # 保存为 JPEG（统一格式，即使上传的是其他格式）
-    img = test_img.convert("RGB")
-    img.save(poster_path, "JPEG", quality=90)
-    
-    # 更新 media_metadata.poster_file 字段
-    rel_path = f"{media_item_id}/poster.jpg"
+        index = int(request.query_params.get("imageIndex", image_index))
+    except ValueError:
+        raise JellyfinError(400, text="Invalid image index") from None
+    if image_index != 0 or index != 0:
+        raise JellyfinError(400, text="Primary only supports index 0")
     async with get_database().session() as session:
-        meta = (
-            await session.execute(
-                select(MediaMetadata).where(
-                    MediaMetadata.media_item_id == media_item_id
-                )
-            )
-        ).scalar_one_or_none()
-        
-        if meta is None:
-            raise JellyfinError(404, text="Item not found")
-        
-        meta.poster_file = rel_path
-        session.add(meta)
-        await session.commit()
-    
+        if await session.get(Library, ref.entity_id) is None:
+            raise not_found()
+    if not request.headers.get("content-type", "").lower().startswith("image/"):
+        raise JellyfinError(400, text="Content-Type must be image/*")
+    # Bound the stream before buffering, allowing base64's 4/3 expansion.
+    max_body = ((MAX_UPLOAD_BYTES + 2) // 3) * 4 + 4096
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > max_body:
+            raise JellyfinError(413, text="Image too large")
+        body.extend(chunk)
+    data = bytes(body)
+    # Raw image signatures contain non-ASCII bytes; base64 is strictly ASCII.
+    if data and data.isascii():
+        try:
+            data = base64.b64decode(b"".join(data.split()), validate=True)
+        except binascii.Error:
+            raise JellyfinError(400, text="Invalid base64 image") from None
+    if not data:
+        raise JellyfinError(400, text="Empty image")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise JellyfinError(413, text="Image too large")
+    try:
+        image = await asyncio.to_thread(normalize_cover_image, data)
+    except ValueError as exc:
+        raise JellyfinError(400, text=str(exc)) from exc
+    await asyncio.to_thread(save_custom_cover, ref.entity_id, image)
     return Response(status_code=204)
 
 

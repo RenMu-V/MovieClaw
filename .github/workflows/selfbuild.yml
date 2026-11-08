@@ -21,6 +21,12 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         id: build
         with:
@@ -29,7 +35,8 @@ jobs:
           shm-size: 2g
           push: true
           tags: |
-            shenmu/movieclaw:arm64-probe-8e0a58a3c21e2470faa3dfbda8aa2980ab819377-${{ github.sha }}
+            shenmu/movieclaw:arm64-library-cover-${{ github.sha }}
+            ghcr.io/renmu-v/movieclaw:arm64-library-cover-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/RenMu-V/MovieClaw
             org.opencontainers.image.revision=${{ github.sha }}
