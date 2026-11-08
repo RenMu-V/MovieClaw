@@ -24,8 +24,8 @@ def test_mixed_library_payload_and_capabilities():
     assert "mixed" not in {kind.value for kind in MediaKind}
 
 
-def test_mixed_disables_unsupported_automatic_delivery():
-    assert not profile_for("mixed").subscribable
+def test_mixed_supports_automatic_delivery():
+    assert profile_for("mixed").subscribable
 
 
 def test_movie_nfo_overrides_episode_shaped_filename(tmp_path):
