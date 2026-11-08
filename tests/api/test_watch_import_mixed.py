@@ -31,13 +31,13 @@ async def db(tmp_path, monkeypatch):
     get_settings.cache_clear()
 
 
-async def _make_libraries(session) -> dict[str, int]:
+async def _make_libraries(session) -> dict[str, int | None]:
     """创建 movie / tv / mixed 三个库。"""
     repo = LibraryRepository(session)
     movie = await repo.create(name="电影库", kind="movie", root_paths=["/media/movies"])
     tv = await repo.create(name="剧集库", kind="tv", root_paths=["/media/tv"])
     mixed = await repo.create(name="混合库", kind="mixed", root_paths=["/media/mixed"])
-    return {"movie": movie.id, "tv": tv.id, "mixed": mixed.id}
+    return {"movie": movie.id, "tv": tv.id, "mixed": mixed.id}  # type: ignore
 
 
 @pytest.mark.asyncio
@@ -69,6 +69,7 @@ async def test_watch_import_movie_auto_routing(db):
         rule = await svc.create(
             source_path="/downloads/watch_movie",
             strategy="hardlink",
+            library_id=None,
             kind="movie",
         )
         
@@ -89,6 +90,7 @@ async def test_watch_import_tv_auto_routing(db):
         rule = await svc.create(
             source_path="/downloads/watch_tv",
             strategy="hardlink",
+            library_id=None,
             kind="tv",
         )
         
@@ -116,6 +118,7 @@ async def test_watch_import_mixed_explicit_over_auto_routing(db):
         auto_rule = await svc.create(
             source_path="/downloads/auto",
             strategy="hardlink",
+            library_id=None,
             kind="movie",
         )
         
