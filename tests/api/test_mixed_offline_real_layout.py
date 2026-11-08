@@ -17,7 +17,9 @@ async def test_mixed_real_layout_offline_series_and_movie(db,tmp_path,monkeypatc
         Image.new('RGB',(120,180),'red').save(d/'Cover.jpg')
         for ep in [1,2]:
             f=season/f'{title}S01E{ep:02d}.strm';f.write_text('https://invalid.example/video')
-            f.with_suffix('.nfo').write_text(f'<episodedetails><title>Episode {ep}</title><season>1</season><episode>{ep}</episode></episodedetails>')
+            if nfo:
+                f.with_suffix('.nfo').write_text(f'<episodedetails><title>Episode {ep}</title><season>1</season><episode>{ep}</episode></episodedetails>')
+            Image.new('RGB',(240,135),'blue').save(f.with_name(f.stem+'-thumb.jpg'))
     d=root/'Movie (2020)';d.mkdir();(d/'Movie.strm').write_text('https://invalid.example/movie');(d/'Movie.nfo').write_text('<movie><title>Sibling Movie</title></movie>')
     async with db.session() as s:
         lib=await LibraryConfigService(s).create(name='Mixed offline',kind=LibraryKind.MIXED,source=source,root_paths=[str(root)],generate_thumbnails=False,detect_media_segments=False)
@@ -41,4 +43,10 @@ async def test_mixed_real_layout_offline_series_and_movie(db,tmp_path,monkeypatc
             async with db.session() as s:
                 meta=(await s.execute(select(MediaMetadata).where(MediaMetadata.media_item_id==item.id))).scalar_one()
                 assert meta.poster_file and (meta.poster_width,meta.poster_height)==(120,180)
+    from movieclaw_db.models import MediaSeason, MediaEpisode
+    async with db.session() as s:
+        assert len((await s.execute(select(MediaSeason))).scalars().all()) == 2
+        assert len((await s.execute(select(MediaEpisode))).scalars().all()) == 4
+    again=await scan_mod.scan_library(lib.id)
+    assert not again.errors and again.unidentified==0
 

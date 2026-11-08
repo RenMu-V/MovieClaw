@@ -42,7 +42,7 @@ def mixed_seed(seeded):
 
 def test_mixed_collection_movies_series_seasons_episodes(mixed_seed, client):
     token = jf_login(client)
-    headers = {"X-Emby-Token": token}
+    headers = {"X-Emby-Token": token, "User-Agent": "Yamby/2.1.0.11(Android"}
     lid = library_guid(mixed_seed["movie_lib"])
     library = client.get(f"/Items/{lid}", headers=headers)
     assert library.status_code == 200, library.text

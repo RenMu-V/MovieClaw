@@ -4231,6 +4231,7 @@ async def _identify_with_fallback(
             if concrete is MediaKind.TV:
                 season, episode = await asyncio.to_thread(_unit_for, concrete, file)
                 if season is not None and episode:
+                    await media_service.ensure_local_unit(item.id, season, episode, file)
                     result = replace(result, unit=(season, episode))
             return result
 

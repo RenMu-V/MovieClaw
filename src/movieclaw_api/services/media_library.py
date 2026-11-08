@@ -198,6 +198,27 @@ class MediaLibraryService:
         )
         return item
 
+    async def ensure_local_unit(self, item_id: int, season: int, episode: int, file) -> None:
+        """Persist locally declared TV hierarchy without fetching provider profiles."""
+        from movieclaw_api.services.library.nfo import read_episode_metadata
+        nfo = read_episode_metadata(file.with_suffix(".nfo"))
+        season_row = (await self._session.execute(select(MediaSeason).where(
+            MediaSeason.media_item_id == item_id, MediaSeason.season_number == season,
+        ))).scalar_one_or_none()
+        if season_row is None:
+            self._session.add(MediaSeason(media_item_id=item_id, season_number=season, name=f"Season {season}"))
+        episode_row = (await self._session.execute(select(MediaEpisode).where(
+            MediaEpisode.media_item_id == item_id, MediaEpisode.season_number == season,
+            MediaEpisode.episode_number == episode,
+        ))).scalar_one_or_none()
+        if episode_row is None:
+            self._session.add(MediaEpisode(
+                media_item_id=item_id, season_number=season, episode_number=episode,
+                name=(nfo.title if nfo and nfo.title else f"Episode {episode}"),
+                overview=nfo.plot if nfo else None,
+            ))
+        await self._session.flush()
+
     async def _refresh_local(
         self, item: MediaItem, identity: LocalIdentity, library_id: int | None
     ) -> MediaItem:

@@ -1881,7 +1881,7 @@ async def get_item(
     user_id: str | None = None,
     scope: ViewerScope = Depends(viewer_scope),
 ) -> JSONResponse:
-    ctx = await dto_context()
+    ctx = await dto_context(request)
     if is_empty_guid(item_id):
         return await items_root()
     ref = decode_guid(item_id)

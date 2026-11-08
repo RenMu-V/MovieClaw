@@ -169,6 +169,26 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
                 meta.backdrop_file = None  # fanart 被用户删了：重做时一并撤掉
                 changed = True
 
+        if item.kind == "tv":
+            from movieclaw_db.models import MediaEpisode
+            from movieclaw_api.services.library.items import find_episode_thumb
+            for episode_file, _lib in sources:
+                episode = (await session.execute(select(MediaEpisode).where(
+                    MediaEpisode.media_item_id == media_item_id,
+                    MediaEpisode.season_number == episode_file.season_number,
+                    MediaEpisode.episode_number == episode_file.episode_number,
+                ))).scalar_one_or_none()
+                if episode is None or (episode.still_file and not force):
+                    continue
+                thumb = await asyncio.to_thread(find_episode_thumb, Path(episode_file.file_path))
+                if thumb is None:
+                    continue
+                dest = item_dir / f"s{episode_file.season_number:02d}e{episode_file.episode_number:02d}.jpg"
+                if await asyncio.to_thread(_transcode_image, thumb, dest):
+                    episode.still_file = str(dest.relative_to(assets_root()))
+                    episode.updated_at = utcnow()
+                    session.add(episode)
+                    changed = True
         if changed:
             meta.updated_at = utcnow()
             session.add(meta)
