@@ -33,7 +33,8 @@ def test_library_primary_upload(client, seeded, monkeypatch, tmp_path):
     assert jf.headers["etag"] != old
     image = Image.open(io.BytesIO(jf.content))
     assert image.size == (90, 60)
-    assert all(abs(a - b) < 5 for a, b in zip(image.getpixel((45, 30)), (25, 100, 180)))
+    pixel = image.convert("RGB").getpixel((45, 30))
+    assert all(abs(a - b) < 5 for a, b in zip(pixel, (25, 100, 180), strict=True))
     from movieclaw_api.services.library.cover import has_custom_cover
 
     assert has_custom_cover(seeded["movie_lib"])
@@ -56,7 +57,10 @@ def test_upload_boundaries(client, seeded, monkeypatch, tmp_path):
         "/Users/AuthenticateByName",
         json={"Username": member["username"], "Pw": member["password"]},
         headers={
-            "Authorization": 'MediaBrowser Client="CoverTest", DeviceId="cover-member", Device="Test", Version="1"'
+            "Authorization": (
+                'MediaBrowser Client="CoverTest", DeviceId="cover-member", '
+                'Device="Test", Version="1"'
+            )
         },
     )
     assert login.status_code == 200
