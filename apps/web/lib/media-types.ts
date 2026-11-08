@@ -13,10 +13,11 @@ export type MediaType = "movie" | "tv";
 /** 媒体库的内容形态：发现/订阅只认 movie/tv，库还多两种本地形态——「其他」
  *  （video，无结构假设的本地视频，见 docs/design/library-other-kind.md）与
  *  「图片」（photo，单张图片，只看不播，见 docs/design/library-photo-kind.md）。 */
-export type LibraryKind = MediaType | "video" | "photo";
+export type LibraryKind = MediaType | "video" | "photo" | "mixed";
 /** 库内条目的身份来源：tmdb=有外部档案；local=本地内容或影视库里尚未识别的文件。 */
 export type ItemSource = "tmdb" | "local";
 export const LIBRARY_KIND_LABELS: Record<LibraryKind, string> = {
+  mixed: "混合内容",
   movie: "电影",
   tv: "剧集",
   video: "其他",
@@ -24,7 +25,7 @@ export const LIBRARY_KIND_LABELS: Record<LibraryKind, string> = {
 };
 export function libraryKindLabels(locale?: AppLocale): Record<LibraryKind, string> {
   const t = appTranslator(locale);
-  return { movie: t("media.kind.movie"), tv: t("media.kind.tv"), video: t("library.kind.other"), photo: t("media.kind.photo") };
+  return { mixed: "混合内容", movie: t("media.kind.movie"), tv: t("media.kind.tv"), video: t("library.kind.other"), photo: t("media.kind.photo") };
 }
 export type MediaSource = "tmdb" | "douban";
 

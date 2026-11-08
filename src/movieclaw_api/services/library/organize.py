@@ -210,7 +210,7 @@ async def build_organize_plan(session, library: Library) -> OrganizePlan:
         .order_by(LibraryFile.file_path)
     )
     rows = [(f, item) for f, item in result.all()]
-    kind = MediaKind(library.kind)
+    kind = MediaKind.TV if library.kind == "mixed" else MediaKind(library.kind)
     roots = [r.rstrip("/") for r in library.root_paths]
     # 季名/集名：命名模板 {season_name}/{episode_title} 的取值（与入库同一来源）
     unit_names = (
@@ -234,6 +234,8 @@ def _build_plan_sync(
     season_names, episode_names = unit_names
     candidates: list[RenameAction] = []
     for row, item in rows:
+        if item is not None:
+            kind = MediaKind(item.kind)
         if row.state != FileState.IN_PLACE:
             continue  # 缺失文件不计入总数也不展示——它不在磁盘上，无从整理
         plan.total += 1

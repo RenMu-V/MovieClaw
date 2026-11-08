@@ -1805,7 +1805,7 @@ async def kind_library_ids(
     """
     rows = await session.execute(
         select(Library.id).where(
-            Library.kind == kind,
+            Library.kind.in_((kind, "mixed")),
             Library.exclude_from_home.is_(False),  # type: ignore[attr-defined]
         )
     )

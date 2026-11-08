@@ -7,6 +7,7 @@ import { LIBRARY_KIND_LABELS, libraryKindLabels, type LibraryKind } from "@/lib/
  * 单独成模块是为了让管理页与表单弹窗不必为这一张表把首页整个模块图拖进来。
  */
 export const LIBRARY_KIND_META: Record<LibraryKind, { label: string; Icon: typeof FilmIcon }> = {
+  mixed: { label: LIBRARY_KIND_LABELS.mixed, Icon: FilmIcon },
   movie: { label: LIBRARY_KIND_LABELS.movie, Icon: FilmIcon },
   tv: { label: LIBRARY_KIND_LABELS.tv, Icon: TvIcon },
   video: { label: LIBRARY_KIND_LABELS.video, Icon: VideoIcon },
@@ -16,6 +17,7 @@ export const LIBRARY_KIND_META: Record<LibraryKind, { label: string; Icon: typeo
 export function libraryKindMeta(locale?: AppLocale) {
   const labels = libraryKindLabels(locale);
   return {
+    mixed: { ...LIBRARY_KIND_META.mixed, label: labels.mixed },
     movie: { ...LIBRARY_KIND_META.movie, label: labels.movie },
     tv: { ...LIBRARY_KIND_META.tv, label: labels.tv },
     video: { ...LIBRARY_KIND_META.video, label: labels.video },

@@ -9,6 +9,7 @@ from sqlmodel import select
 from movieclaw_db.models.base import utcnow
 from movieclaw_db.models.library import Library
 from movieclaw_db.models.library_file import FileState, LibraryFile
+from movieclaw_db.models.media_item import MediaItem
 
 #: ``refresh_stats`` 收尾钩子。库存变化的写路径有二十来处（扫描、入库、转移、
 #: 回收、认领……），它们都收口在 refresh_stats；跟着库内容一起失效的派生数据
@@ -162,10 +163,10 @@ class LibraryRepository:
                 LibraryFile.season_number.label("season_number"),
                 LibraryFile.episode_number.label("episode_number"),
             )
-            .join(Library, Library.id == LibraryFile.library_id)
+            .join(MediaItem, MediaItem.id == LibraryFile.media_item_id)
             .where(
                 LibraryFile.library_id.in_(ids),  # type: ignore[attr-defined]
-                Library.kind == "tv",
+                MediaItem.kind == "tv",
                 present,
                 LibraryFile.media_item_id.is_not(None),  # type: ignore[union-attr]
                 LibraryFile.unidentified_code.is_(None),  # type: ignore[union-attr]

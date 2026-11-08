@@ -14,7 +14,7 @@ from movieclaw_api.services.library.preflight import (
     MAX_SELECTION as BATCH_TRANSFER_MAX_SELECTION,
 )
 from movieclaw_db.models.library import Library
-from movieclaw_media.models import MediaKind
+from movieclaw_media.models import LibraryKind, MediaKind
 
 
 class CloudFolderPayload(BaseModel):
@@ -36,7 +36,7 @@ class LibraryPayload(BaseModel):
     """创建/更新库的请求体。kind/source 仅创建时生效，更新时忽略（创建后不可改）。"""
 
     name: str = Field(description="库的展示名（全局唯一）")
-    kind: MediaKind = Field(description="内容形态：movie=电影 / tv=剧集 / video=其他（无结构假设）")
+    kind: LibraryKind = Field(description="库类型：movie / tv / mixed（电影与剧集同库）/ video / photo")
     source: str | None = Field(
         default=None,
         description=(
@@ -391,7 +391,7 @@ def _source_view_fields(row: Library) -> dict:
 class LibraryView(BaseModel):
     id: int
     name: str
-    kind: MediaKind
+    kind: LibraryKind
     source: str = Field(default="tmdb", description="身份来源：tmdb / local / 外部库源")
     source_title: str | None = Field(
         default=None,
@@ -525,7 +525,7 @@ class LibraryView(BaseModel):
         return cls(
             id=row.id,  # type: ignore[arg-type]  # 落库后必有主键
             name=row.name,
-            kind=MediaKind(row.kind),
+            kind=LibraryKind(row.kind),
             source=row.source,
             **_source_view_fields(row),
             capabilities=LibraryCapabilitiesView(**capabilities_of(profile_of(row))),

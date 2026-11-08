@@ -30,6 +30,16 @@ class MediaKind(str, Enum):  # noqa: UP042 —— 改 StrEnum 会改变 str()/f-
     PHOTO = "photo"
 
 
+class LibraryKind(str, Enum):  # noqa: UP042
+    """Library scope; individual items retain concrete MediaKind namespaces."""
+
+    MOVIE = "movie"
+    TV = "tv"
+    VIDEO = "video"
+    PHOTO = "photo"
+    MIXED = "mixed"
+
+
 class MediaSource(StrEnum):
     """媒体数据来源；ID 只在同一来源内部唯一。"""
 

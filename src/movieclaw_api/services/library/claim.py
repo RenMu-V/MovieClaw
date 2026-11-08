@@ -83,6 +83,10 @@ async def claim_files(
     library = await LibraryConfigService(session).get(rows[0].library_id)
     profile = profile_of(library)
     kind = profile.kind
+    if kind == "mixed":
+        if target_kind not in (MediaKind.MOVIE, MediaKind.TV):
+            raise BadRequestException(message_key="errors.library.kindUnsupported", params={"kind": "mixed: select movie or tv"})
+        kind = target_kind
     if not profile.scraped:
         raise BadRequestException(
             message_key="errors.library.localClaimUnsupported", params={"name": library.name}

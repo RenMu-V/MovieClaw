@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -24,7 +24,7 @@ from movieclaw_api.exceptions import BadRequestException
 from movieclaw_api.i18n.stored import reference, render_value, source_render
 from movieclaw_api.services.library.layout import IMAGE_EXTS, SCAN_VIDEO_EXTS
 from movieclaw_db.models.media_item import MediaSource
-from movieclaw_media.models import MediaKind
+from movieclaw_media.models import LibraryKind, MediaKind
 
 if TYPE_CHECKING:
     from movieclaw_db.models.library import Library
@@ -50,7 +50,7 @@ class IgnoreProfile(StrEnum):
 class LibraryProfile:
     """一种库类型（形态 × 来源）的全部能力声明。"""
 
-    kind: MediaKind
+    kind: MediaKind | LibraryKind
     source: str
     scraped: bool  # 身份来自远程数据源：走识别链、刮削、写 NFO、定时刷新
     naming: bool  # 可按命名模板整理目录与文件名
@@ -149,7 +149,16 @@ PROFILES: dict[tuple[str, str], LibraryProfile] = {
     ),
 }
 
-def kind_reference(kind: MediaKind | str) -> dict:
+PROFILES[("mixed", MediaSource.TMDB)] = replace(
+    PROFILES[("movie", MediaSource.TMDB)],
+    kind=LibraryKind.MIXED,
+    jellyfin_collection="",
+)
+
+
+def kind_reference(kind: MediaKind | LibraryKind | str) -> dict:
+    if kind == "mixed":
+        return reference("library.kind.mixed")
     return reference(
         {
             MediaKind.MOVIE: "media.kind.movie",
@@ -164,9 +173,12 @@ def kind_reference(kind: MediaKind | str) -> dict:
 KIND_LABELS: dict[MediaKind, str] = {
     kind: source_render(kind_reference(kind)) for kind in MediaKind
 }
+KIND_LABELS[LibraryKind.MIXED] = "混合内容"
 
 
 def kind_label(kind: MediaKind | str) -> str:
+    if kind == "mixed":
+        return "混合内容"
     value = kind if isinstance(kind, MediaKind) else MediaKind(kind)
     return KIND_LABELS[value]
 

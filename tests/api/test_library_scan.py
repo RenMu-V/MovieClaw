@@ -255,6 +255,32 @@ def _make_tv_library(tmp_path):
     return root
 
 
+async def test_mixed_scan_preserves_concrete_namespaces_and_units(db, tmp_path):
+    root = tmp_path / "mixed"
+    root.mkdir()
+    # Same numeric id is deliberately valid in both TMDB namespaces.
+    (root / "feature.strm").write_text("https://example.invalid/feature.mp4")
+    (root / "feature.nfo").write_text("<movie><tmdbid>200</tmdbid></movie>")
+    (root / "测试剧集.S01E01.strm").write_text("https://example.invalid/e1.mp4")
+    (root / "tvshow.nfo").write_text("<tvshow><tmdbid>200</tmdbid></tvshow>")
+    async with db.session() as session:
+        library = await LibraryRepository(session).create(
+            name="混合内容测试", kind="mixed", root_paths=[str(root)]
+        )
+    summary = await scan_library(library.id)
+    assert summary.errors == []
+    assert summary.identified == 2
+    async with db.session() as session:
+        rows = (await session.execute(select(LibraryFile))).scalars().all()
+        items = {row.file_path: await session.get(MediaItem, row.media_item_id) for row in rows}
+        assert items[str(root / "feature.strm")].kind == "movie"
+        assert items[str(root / "测试剧集.S01E01.strm")].kind == "tv"
+        assert len({item.id for item in items.values()}) == 2
+        refreshed = await session.get(Library, library.id)
+        assert refreshed.stats_episode_count == 1
+        assert {(r.season_number, r.episode_number) for r in rows} == {(0, 0), (1, 1)}
+
+
 async def test_scan_identifies_by_name_and_flags_unknown(db, tmp_path) -> None:
     root = _make_tv_library(tmp_path)
     async with db.session() as session:

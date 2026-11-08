@@ -97,7 +97,7 @@ from movieclaw_api.services.library.nfo import (
     read_episode_metadata,
 )
 from movieclaw_api.services.library.origin import scan_origin
-from movieclaw_api.services.library.profile import IgnoreProfile, LibraryProfile, profile_of
+from movieclaw_api.services.library.profile import IgnoreProfile, LibraryProfile, profile_for, profile_of
 from movieclaw_api.services.library.reanchor import migrate_watch_state
 from movieclaw_api.services.library.resolve import (
     LocalEvidence,
@@ -3612,7 +3612,8 @@ async def _ingest_file(
         unidentified_code = identified.code
         item_id = identified.item.id if identified.item is not None else None
         # 季集解析进线程池：要读分集 NFO（磁盘 IO），解析层兜底还会跑 NER
-        season, episode = (0, 0) if is_disc else await _scan_unit(kind, file, identified)
+        actual_kind = MediaKind(identified.item.kind) if identified.item is not None else kind
+        season, episode = (0, 0) if is_disc else await _scan_unit(actual_kind, file, identified)
         identity_source = identified.source if item_id is not None else None
         # 临时身份没有"识别器版本"可言：它压根没识别成功
         resolved_version = RESOLVER_VERSION if item_id is not None and not provisional else None
@@ -4137,6 +4138,31 @@ class _Identified:
         return cls(None, message["message"], candidates or [], code=code, reason_message=message)
 
 
+def _mixed_entry_kind(root: Path, file: Path, *, is_disc: bool = False) -> MediaKind | None:
+    """Only strong local structure chooses a namespace; reuse NFO parsers."""
+    if not is_disc:
+        own = read_entry_identity(file.with_suffix(".nfo"))
+        if own is not None:
+            return own.kind
+        if read_episode_metadata(file.with_suffix(".nfo")) is not None:
+            return MediaKind.TV
+        attrs = enrich(file.stem)
+        if season_from_dir(file.parent) is not None or (attrs.seasons and attrs.episodes):
+            return MediaKind.TV
+        # NER is optional; the established explicit SxxExx convention is not.
+        if re.search(r"(?i)\bS\d{1,3}E\d{1,4}\b", file.stem):
+            return MediaKind.TV
+    current = file if is_disc else file.parent
+    while True:
+        identities = [read_entry_identity(current / name) for name in ("movie.nfo", "tvshow.nfo")]
+        kinds = {identity.kind for identity in identities if identity is not None}
+        if len(kinds) == 1:
+            return kinds.pop()
+        if len(kinds) > 1 or current == root or current.parent == current:
+            return None
+        current = current.parent
+
+
 async def _identify_with_fallback(
     media_service: MediaLibraryService,
     profile: LibraryProfile,
@@ -4163,6 +4189,42 @@ async def _identify_with_fallback(
     """
     kind = profile.kind
     assert library.id is not None
+    if kind == "mixed":
+        concrete = await asyncio.to_thread(_mixed_entry_kind, root, file, is_disc=is_disc)
+        if concrete is not None:
+            return await _identify_with_fallback(
+                media_service, profile_for(concrete), library, root, file,
+                cache, episodes_cache, spec=spec, duration_seconds=duration_seconds,
+                hint=hint, is_disc=is_disc,
+            )
+        # Reuse both existing conservative resolvers. Numeric ids alone never
+        # select a namespace: only a unique, verified name resolution may do so.
+        async def resolve_kind(candidate: MediaKind) -> _Identified:
+            evidence = await asyncio.to_thread(
+                guess_evidence, candidate, root, file, is_disc=is_disc
+            )
+            return await _resolve_by_name(
+                media_service, candidate, file, cache, episodes_cache, evidence,
+                duration_seconds=spec.duration_seconds if spec else duration_seconds, hint=hint,
+            )
+
+        results = await asyncio.gather(*(resolve_kind(k) for k in (MediaKind.MOVIE, MediaKind.TV)))
+        matches = [r for r in results if r.item is not None]
+        if len(matches) == 1:
+            result = matches[0]
+            return await _with_unit(media_service, file, result) if result.item.kind == "tv" else result
+        # Unknown shape stays a playable provisional video, not a fake movie.
+        identity = await asyncio.to_thread(
+            build_local_identity, library_id=library.id, kind=MediaKind.VIDEO,
+            root=root, file=file, spec=spec, evidence=None, is_disc=is_disc, scraped=True,
+        )
+        item = await media_service.ensure_local_item(MediaKind.VIDEO, identity, library_id=library.id)
+        return replace(
+            _Identified.from_message(
+                stored_fields("library.identification.unparsable"),
+                code=UnidentifiedCode.AMBIGUOUS if matches else UnidentifiedCode.NO_MATCH,
+            ), item=item, source=IdentitySource.LOCAL, provisional=True,
+        )
     evidence: LocalEvidence | None = None
     if spec is not None:
         duration_seconds = spec.duration_seconds
@@ -4542,6 +4604,7 @@ async def _resolve_by_name(
             episodes_cache[directory] = await asyncio.to_thread(local_episode_count, directory)
         evidence.local_episodes = episodes_cache[directory]
     key = (
+        kind.value,
         evidence.title,
         evidence.alt_title,
         evidence.year,

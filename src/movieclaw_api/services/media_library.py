@@ -401,6 +401,6 @@ class MediaLibraryService:
         if library_id is None:
             return None
         library = await self._session.get(Library, library_id)
-        if library is None or library.kind != kind.value:
+        if library is None or library.kind not in (kind.value, "mixed"):
             return None
         return library
