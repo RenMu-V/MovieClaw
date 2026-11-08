@@ -292,7 +292,7 @@ async def resolve_save_path(
     # 带上条目：命名模板里的 {original_title}/{tmdb_id} 只有拿到条目才渲染得出，
     # 投递侧与整理侧因此算出同一个目录名（命名同源，见 library/naming.py）
     entry_dir = (
-        derive_save_path(library, title=title, year=year, item=item) if library and title else None
+        derive_save_path(library, title=title, year=year, item=item, kind=kind) if library and title else None
     )
     if rule is not None:
         return SavePathDecision(

@@ -837,7 +837,7 @@ async def preview_dispatch_route(
     else:
         entry_title, entry_year, entry_item = title, year, None
     entry_dir = (
-        derive_save_path(library, title=entry_title, year=entry_year, item=entry_item)
+        derive_save_path(library, title=entry_title, year=entry_year, item=entry_item, kind=kind)
         if library is not None and entry_title
         else None
     )

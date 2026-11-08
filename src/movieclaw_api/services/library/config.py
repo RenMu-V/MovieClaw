@@ -73,14 +73,15 @@ def derive_entry_dir(
 
 
 def derive_save_path(
-    library: Library, *, title: str, year: int | None, item: object | None = None
+    library: Library, *, title: str, year: int | None, item: object | None = None, kind: str | None = None
 ) -> str | None:
-    """由库推导入库保存路径：``{主根}/{title} ({year})``。
+    """由库推导入库保存路径：``{主根}/{title} ({year})``；mixed 库时为 ``{主根}/{kind}/{title} ({year})``。
 
     电影与剧集同构（剧集的 Season 子目录是 L2 整理器的职责，投递阶段
     下载器只需要落到条目目录）。库没有根路径时返回 None（调用方回落
-    到下载器默认目录）。路径用 POSIX 分隔符拼接——save_path 是给
-    下载器所在环境用的，movieclaw 部署面向 Linux/NAS/Docker。
+    到下载器默认目录）。mixed 库时需传入 kind 以分离 movie/tv 内容。
+    路径用 POSIX 分隔符拼接——save_path 是给下载器所在环境用的，
+    movieclaw 部署面向 Linux/NAS/Docker。
     """
     root = library.primary_root
     if not root:
@@ -90,8 +91,15 @@ def derive_save_path(
     if not profile_of(library).naming:
         # 其他库原样落库：没有「标题 (年份)」这种条目目录约定，下载直接进主根
         return root
+    
+    # mixed 库需要 movie/tv 子目录分离
+    effective_root = root
+    if library.kind == "mixed" and kind in ("movie", "tv"):
+        import posixpath
+        effective_root = posixpath.join(root.rstrip("/"), kind)
+    
     # 库自己就是覆盖来源：命名模板可按库覆盖（动漫库与电影库各用一套）
-    return derive_entry_dir(root, title=title, year=year, item=item, library=library)
+    return derive_entry_dir(effective_root, title=title, year=year, item=item, library=library)
 
 
 def _provider_of_source(source: str | None):

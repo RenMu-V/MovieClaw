@@ -2091,7 +2091,7 @@ async def _ingest_entry(
         dest_dir = derive_entry_dir(staging, title=item.title, year=item.year, item=item)
     else:
         assert dest_library is not None
-        dest_dir = derive_save_path(dest_library, title=item.title, year=item.year, item=item)
+        dest_dir = derive_save_path(dest_library, title=item.title, year=item.year, item=item, kind=kind.value)
         if dest_dir is None:
             return await conclude(
                 IngestStatus.FAILED,
