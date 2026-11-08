@@ -121,10 +121,29 @@ def build_local_identity(
     本地内容库一文件一条目、标题取文件名；影视库的临时身份按作品目录分组。
     """
     nfo: LocalNfo | None = None
-    if not is_disc:
-        nfo = read_local_sidecar(file.with_suffix(".nfo"))
-    title_from_nfo = bool(nfo and nfo.title)
     dirs = entry_dirs(root, file) if scraped else []
+    if kind is MediaKind.TV:
+        # Series metadata belongs to the show, never to an episode sidecar.
+        # A season may contain per-episode folders; these are not show keys.
+        from movieclaw_api.services.library.layout import season_from_dir
+        ancestors = []
+        current = file.parent
+        while current != root and root in current.parents:
+            ancestors.append(current)
+            current = current.parent
+        show = next((d for d in ancestors if (d / "tvshow.nfo").is_file()), None)
+        if show is None:
+            season = next((d for d in ancestors if season_from_dir(d) is not None), None)
+            show = season.parent if season is not None else (dirs[0] if dirs else file.parent)
+        dirs = [show] if show != root else []
+        nfo = read_local_sidecar(show / "tvshow.nfo")
+        # Use the series directory even for a local-source mixed library.
+        identity_file = show / "__series__"
+    else:
+        identity_file = file
+        if not is_disc:
+            nfo = read_local_sidecar(file.with_suffix(".nfo"))
+    title_from_nfo = bool(nfo and nfo.title)
     if title_from_nfo:
         title = nfo.title  # type: ignore[union-attr]
     elif dirs:
@@ -145,7 +164,7 @@ def build_local_identity(
         year = content_date.year
 
     identity = LocalIdentity(
-        external_id=local_external_id(library_id, kind, root, file, evidence, scraped=scraped),
+        external_id=local_external_id(library_id, kind, root, identity_file, evidence, scraped=scraped),
         title=title,
         year=year,
         release_date=content_date,

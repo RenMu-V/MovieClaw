@@ -4187,6 +4187,8 @@ def _mixed_entry_kind(root: Path, file: Path, *, is_disc: bool = False) -> Media
                 # If artwork exists and filename suggests episodes, likely TV
                 if re.search(r"(?i)S\d{1,3}E\d{1,4}", file.stem):
                     return MediaKind.TV
+    if root.name.casefold() in {"电影", "movies", "movie"}:
+        return MediaKind.MOVIE
     return None
 
 
@@ -4219,57 +4221,23 @@ async def _identify_with_fallback(
     if kind == "mixed":
         concrete = await asyncio.to_thread(_mixed_entry_kind, root, file, is_disc=is_disc)
         if concrete is not None:
-            return await _identify_with_fallback(
-                media_service,
-                profile_for(concrete),
-                library,
-                root,
-                file,
-                cache,
-                episodes_cache,
-                spec=spec,
-                duration_seconds=duration_seconds,
-                hint=hint,
-                is_disc=is_disc,
+            identity = await asyncio.to_thread(
+                build_local_identity, library_id=library.id, kind=concrete,
+                root=root, file=file, spec=spec, evidence=None,
+                is_disc=is_disc, scraped=True,
             )
+            item = await media_service.ensure_local_item(concrete, identity, library_id=library.id)
+            result = _Identified(item=item, source=identity.identity_source)
+            if concrete is MediaKind.TV:
+                season, episode = await asyncio.to_thread(_unit_for, concrete, file)
+                if season is not None and episode:
+                    result = replace(result, unit=(season, episode))
+            return result
 
         # concrete=None: ambiguous, try local-first for mixed libraries
         # For mixed+local: prefer local NFO/sidecar evidence over TMDB
         profile_source = profile.source if hasattr(profile, 'source') else None
         is_local_source = profile_source == "local" or library.source == "local"
-        
-        # Try building local identities for both kinds (TV first, since more specific)
-        local_identity = None
-        for candidate_kind in (MediaKind.TV, MediaKind.MOVIE):
-            local_identity = await asyncio.to_thread(
-                build_local_identity,
-                library_id=library.id,
-                kind=candidate_kind,
-                root=root,
-                file=file,
-                spec=spec,
-                evidence=None,
-                is_disc=is_disc,
-                scraped=True,
-            )
-            # If local evidence strongly suggests this kind, use it
-            if local_identity is not None and local_identity.title:
-                break
-        
-        if local_identity is not None and local_identity.title:
-            item = await media_service.ensure_local_item(
-                local_identity.kind, local_identity, library_id=library.id
-            )
-            if item is not None:
-                # Successfully created local item from evidence
-                result = _Identified(
-                    item=item,
-                    source=IdentitySource.LOCAL,
-                    matched_title=local_identity.title,
-                )
-                if item.kind == "tv":
-                    result = await _with_unit(media_service, file, result)
-                return result
         
         # Reuse both existing conservative resolvers. Numeric ids alone never
         # select a namespace: only a unique, verified name resolution may do so.

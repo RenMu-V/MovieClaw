@@ -49,8 +49,9 @@ REPORTED_VERSION = "12.1.0"
 LEGACY_REPORTED_VERSION = "10.10.7"
 #: 维持旧版本号的客户端标识（小写子串）。Infuse 官方文档公开了 UA
 #: ``Infuse-Direct/<ver>`` 与 ``Client="Infuse-Direct"``（另有 Infuse-Library、
-#: Infuse-Download 两种连接类型）；VidHub 按名称匹配；Yamby 不支持 12.x 版本号
-#: 会回退到 Emby 模式导致识别不出 CollectionType=folders 混合库。
+#: Infuse-Download 两种连接类型）；VidHub 按名称匹配。
+#: Yamby retained for compatibility, not as a proven mixed-library root cause:
+#: its public changelog explicitly documents Jellyfin 12 support.
 _LEGACY_CLIENT_MARKERS = ("infuse", "vidhub", "yamby")
 
 

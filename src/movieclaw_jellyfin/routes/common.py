@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import Request
+
 from movieclaw_api.settings.schemas import get_jellyfin_compat
 from movieclaw_jellyfin.catalog import DtoContext, DtoOptions
 from movieclaw_jellyfin.errors import not_found
@@ -44,9 +46,13 @@ def dto_options(
     )
 
 
-async def dto_context() -> DtoContext:
+async def dto_context(request: Request | None = None) -> DtoContext:
     setting = await get_jellyfin_compat()
-    return DtoContext(server_id=setting.server_id)
+    client = ""
+    if request is not None:
+        from movieclaw_jellyfin.security import read_authorization
+        client = read_authorization(request).client or request.headers.get("user-agent", "")
+    return DtoContext(server_id=setting.server_id, client=client)
 
 
 async def require_enabled() -> None:

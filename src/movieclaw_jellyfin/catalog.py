@@ -1241,6 +1241,7 @@ def _folder_user_data(
 @dataclass
 class DtoContext:
     server_id: str
+    client: str = ""
 
 
 def _common(
@@ -1751,7 +1752,10 @@ def library_view_dto(
 ) -> dict[str, Any]:
     dto = _common(ctx, library_guid(library.id), library.name, "CollectionFolder", "Unknown")
     dto["IsFolder"] = True
-    dto["CollectionType"] = collection_type_of(library)
+    # Real mixed CollectionFolders have a nullable CollectionType; "folders"
+    # denotes the separate folder-browser view. Preserve other clients' contract.
+    if not (library.kind == "mixed" and "yamby" in ctx.client.lower()):
+        dto["CollectionType"] = collection_type_of(library)
     # 封面 = 服务端渲染的氛围光货架拼贴（library.cover 服务），tag 即素材指纹
     dto["ImageTags"] = {"Primary": cover_tag} if cover_tag else {}
     dto["BackdropImageTags"] = []

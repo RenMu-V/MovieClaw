@@ -429,10 +429,11 @@ async def _cover_tags(libraries: list[Library]) -> list[str | None]:
 @router.get("/UserViews")
 @router.get("/Users/{user_id}/Views")
 async def user_views(
+    request: Request,
     user_id: str | None = None,
     scope: ViewerScope = Depends(viewer_scope),
 ) -> JSONResponse:
-    ctx = await dto_context()
+    ctx = await dto_context(request)
     async with get_database().session() as session:
         libraries = await list_libraries(session, visible_ids=scope.visible)
     tags = await _cover_tags(libraries)
@@ -796,7 +797,7 @@ def _entry_dto(ctx: DtoContext, entry: Entry, options: DtoOptions) -> dict[str, 
 
 async def _query_items(request: Request, scope: ViewerScope) -> JSONResponse:
     q = request.query_params
-    ctx = await dto_context()
+    ctx = await dto_context(request)
     options = dto_options(
         q.get("fields"),
         enable_user_data=q.get("enableUserData"),

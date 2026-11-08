@@ -19,7 +19,7 @@ def test_mixed_library_payload_and_capabilities():
     assert payload.kind.value == "mixed"
     profile = profile_for("mixed")
     assert profile.scraped and profile.playable and profile.jellyfin_exposed
-    assert profile.jellyfin_collection == ""
+    assert profile.jellyfin_collection == "folders"
     assert "mixed" in {p["kind"] for p in library_kind_options()}
     assert "mixed" not in {kind.value for kind in MediaKind}
 

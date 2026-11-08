@@ -121,6 +121,16 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
         from movieclaw_api.services.media_scrape import assets_root
 
         video = Path(file.file_path)
+        if item.kind == "tv":
+            root = next((Path(p) for p in library.root_paths if Path(p) in video.parents), video.parent)
+            from movieclaw_api.services.library.layout import season_from_dir
+            ancestors = [d for d in video.parents if d != root and root in d.parents]
+            show = next((d for d in ancestors if (d / "tvshow.nfo").is_file()), None)
+            if show is None:
+                season_dir = next((d for d in ancestors if season_from_dir(d) is not None), None)
+                show = season_dir.parent if season_dir else video.parent
+            # A synthetic image lookup input cannot probe an episode/video.
+            video = show / "__series__.strm"
         item_dir = assets_root() / str(media_item_id)
         poster_dest, backdrop_dest = item_dir / "poster.jpg", item_dir / "backdrop.jpg"
         poster_rel = str(poster_dest.relative_to(assets_root()))
@@ -139,7 +149,7 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
                     duration_seconds=file.duration_seconds,
                     is_disc=file.container in ("bluray", "dvd"),
                     hdr=file.hdr,
-                    allow_video=library.generate_thumbnails,
+                    allow_video=library.generate_thumbnails and item.kind != "tv",
                 )
             if size is not None:
                 meta.poster_file = poster_rel
