@@ -157,7 +157,7 @@ function kindCards(t: ReturnType<typeof appTranslator>): Record<
       traits: "复用电影与剧集识别，保留季集结构；不明确的文件留待识别",
       chosen: "混合内容 · 电影与剧集同库",
       defaultName: "混合内容",
-      defaults: "按作品实际类型识别与播放，不移动已有文件；一期仅扫描已有目录，暂不支持订阅自动路由或监听导入",
+      defaults: "按作品实际类型识别与播放，不移动已有文件；支持订阅自动路由与监听导入，电影与剧集分别落入 movie/tv 子目录",
     },
     tv: {
       blurb: t("library.form.tv.blurb"),

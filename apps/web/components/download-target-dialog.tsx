@@ -826,7 +826,7 @@ function MemberDialogContent({
                     {t("download.target.libraryDownload", { name: library.name })}
                   </span>
                   <span className="mt-0.5 block text-caption leading-relaxed text-[var(--text-faint)]">
-                    {library.kind === kind || !kind
+                    {library.kind === kind || library.kind === "mixed" || !kind
                       ? t("download.target.memberLibraryHint")
                       : t("download.target.kindMismatch", { kind: library.kind })}
                   </span>
