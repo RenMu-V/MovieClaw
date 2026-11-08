@@ -153,7 +153,14 @@ PROFILES[("mixed", MediaSource.TMDB)] = replace(
     PROFILES[("movie", MediaSource.TMDB)],
     kind=LibraryKind.MIXED,
     subscribable=True,
-    jellyfin_collection="",
+    jellyfin_collection="folders",
+)
+
+PROFILES[("mixed", MediaSource.LOCAL)] = replace(
+    PROFILES[("video", MediaSource.LOCAL)],
+    kind=LibraryKind.MIXED,
+    subscribable=False,
+    jellyfin_collection="folders",
 )
 
 
