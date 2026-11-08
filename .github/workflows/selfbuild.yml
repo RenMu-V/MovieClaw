@@ -40,7 +40,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/RenMu-V/MovieClaw
             org.opencontainers.image.revision=${{ github.sha }}
-            de.sttss.movieclaw.base_revision=961123d73a30256acf8a0a1177843e8c3833e2c8
+            de.sttss.movieclaw.base_revision=ff9bf686dee11c9b335670f85dff0ac159a5921e
       - name: Verify pushed artifact
         env:
           IMAGE: shenmu/movieclaw@${{ steps.build.outputs.digest }}
