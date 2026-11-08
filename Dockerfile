@@ -134,9 +134,14 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /model \
     && cd /model \
-    && curl -fSL --retry 3 -O "$NER_MODEL_BASE/model.int8.onnx" \
-    && curl -fSL --retry 3 -O "$NER_MODEL_BASE/tokenizer.json" \
-    && curl -fSL --retry 3 -O "$NER_MODEL_BASE/labels.json" \
+    && curl -fSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 600 -O "$NER_MODEL_BASE/model.int8.onnx" \
+    && curl -fSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 600 -O "$NER_MODEL_BASE/tokenizer.json" \
+    && curl -fSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 600 -O "$NER_MODEL_BASE/labels.json" \
+    && printf '%s  %s\n' \
+        f59764e2021d0c8dbb84f580916d478a587d44e3f8d7778cbaca31a71a3734a3 model.int8.onnx \
+        a34543f1ac37c19b829db3674d5af635d1d72a5b4b3801d0ba208911df5860a2 tokenizer.json \
+        86451093d5112802bc19a34675115cf417fb70749df8c2059df98923b605f2ab labels.json \
+        | sha256sum -c - \
     # 记录内置模型的 Release tag（URL 末段；先去尾斜杠，防加速镜像地址
     # 以 / 结尾时写入空 tag），应用内模型更新据此比对版本
     && NER_BASE_TRIMMED="${NER_MODEL_BASE%/}" \
@@ -160,7 +165,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /model \
     && cd /tmp \
-    && curl -fSL --retry 3 -o rapidocr.whl \
+    && curl -fSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 600 -o rapidocr.whl \
         "$PYPI_FILES_BASE/ba/12/1e5497183bdbe782dbb91bad1d0d2297dba4d2831b2652657f7517bfc6df/rapidocr_onnxruntime-1.4.4-py3-none-any.whl" \
     && echo "971d7d5f223a7a808662229df1ef69893809d8457d834e6373d3854bc1782cbf  rapidocr.whl" | sha256sum -c - \
     && unzip -j rapidocr.whl \
@@ -191,14 +196,14 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /model /tmp/asr \
     && cd /tmp/asr \
-    && curl -fSL --retry 3 -o sv.tar.bz2 \
+    && curl -fSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 600 -o sv.tar.bz2 \
         "$ASR_MODEL_BASE/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2" \
     && echo "7d1efa2138a65b0b488df37f8b89e3d91a60676e416f515b952358d83dfd347e  sv.tar.bz2" | sha256sum -c - \
     && tar xjf sv.tar.bz2 \
     && SV=sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17 \
     && cp "$SV/model.int8.onnx" "$SV/tokens.txt" "$SV/LICENSE" /model/ \
     && cp "$SV/test_wavs/en.wav" /model/smoke-en.wav \
-    && curl -fSL --retry 3 -o /model/silero_vad.onnx "$ASR_MODEL_BASE/silero_vad.onnx" \
+    && curl -fSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 600 -o /model/silero_vad.onnx "$ASR_MODEL_BASE/silero_vad.onnx" \
     && echo "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6  /model/silero_vad.onnx" \
         | sha256sum -c - \
     && printf '%s\n' \
@@ -230,7 +235,7 @@ RUN case "$TARGETARCH" in \
         arm64) SECONV_ARCH=ARM64; SECONV_SHA=ab58891abd54a1604fdf5956c340159bd2efbcaef8cf2c69d97fcc55b83b4718 ;; \
         *) echo "不支持的 seconv 目标架构：$TARGETARCH（仅 amd64/arm64）" >&2; exit 1 ;; \
     esac \
-    && curl -fSL --retry 3 -o /tmp/seconv.tar.gz \
+    && curl -fSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 600 -o /tmp/seconv.tar.gz \
         "$SECONV_BASE/SeConv-Linux-$SECONV_ARCH.tar.gz" \
     && echo "$SECONV_SHA  /tmp/seconv.tar.gz" | sha256sum -c - \
     && mkdir -p /out \
