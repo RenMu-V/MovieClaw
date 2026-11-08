@@ -97,7 +97,12 @@ from movieclaw_api.services.library.nfo import (
     read_episode_metadata,
 )
 from movieclaw_api.services.library.origin import scan_origin
-from movieclaw_api.services.library.profile import IgnoreProfile, LibraryProfile, profile_for, profile_of
+from movieclaw_api.services.library.profile import (
+    IgnoreProfile,
+    LibraryProfile,
+    profile_for,
+    profile_of,
+)
 from movieclaw_api.services.library.reanchor import migrate_watch_state
 from movieclaw_api.services.library.resolve import (
     LocalEvidence,
@@ -1718,10 +1723,10 @@ async def _scan(
                         pass
                 # 旧版改名归并只迁路径，可能留下已识别的 S0E0；只补这类
                 # 未定位单元，不重识别作品，也不改人工结论或已有的有效单元。
-                if (
-                    (existing.season_number, existing.episode_number) == (0, 0)
-                    and await _refresh_episode_unit(existing, kind, file)
-                ):
+                if (existing.season_number, existing.episode_number) == (
+                    0,
+                    0,
+                ) and await _refresh_episode_unit(existing, kind, file):
                     rows_refreshed += 1
                 # 外挂字幕重发现 + 视频变化重探（jellyfin-subtitle.md §2.4）。
                 # 前者纯内存匹配 + 对命中的少数字幕文件 stat，每轮都做；
@@ -4146,21 +4151,25 @@ def _mixed_entry_kind(root: Path, file: Path, *, is_disc: bool = False) -> Media
             return own.kind
         if read_episode_metadata(file.with_suffix(".nfo")) is not None:
             return MediaKind.TV
-        attrs = enrich(file.stem)
-        if season_from_dir(file.parent) is not None or (attrs.seasons and attrs.episodes):
-            return MediaKind.TV
-        # NER is optional; the established explicit SxxExx convention is not.
-        if re.search(r"(?i)\bS\d{1,3}E\d{1,4}\b", file.stem):
-            return MediaKind.TV
+
     current = file if is_disc else file.parent
     while True:
         identities = [read_entry_identity(current / name) for name in ("movie.nfo", "tvshow.nfo")]
         kinds = {identity.kind for identity in identities if identity is not None}
         if len(kinds) == 1:
             return kinds.pop()
-        if len(kinds) > 1 or current == root or current.parent == current:
+        if len(kinds) > 1:
             return None
+        if current == root or current.parent == current:
+            break
         current = current.parent
+    if not is_disc:
+        attrs = enrich(file.stem)
+        if season_from_dir(file.parent) is not None or (attrs.seasons and attrs.episodes):
+            return MediaKind.TV
+        if re.search(r"(?i)\bS\d{1,3}E\d{1,4}\b", file.stem):
+            return MediaKind.TV
+    return None
 
 
 async def _identify_with_fallback(
@@ -4193,10 +4202,19 @@ async def _identify_with_fallback(
         concrete = await asyncio.to_thread(_mixed_entry_kind, root, file, is_disc=is_disc)
         if concrete is not None:
             return await _identify_with_fallback(
-                media_service, profile_for(concrete), library, root, file,
-                cache, episodes_cache, spec=spec, duration_seconds=duration_seconds,
-                hint=hint, is_disc=is_disc,
+                media_service,
+                profile_for(concrete),
+                library,
+                root,
+                file,
+                cache,
+                episodes_cache,
+                spec=spec,
+                duration_seconds=duration_seconds,
+                hint=hint,
+                is_disc=is_disc,
             )
+
         # Reuse both existing conservative resolvers. Numeric ids alone never
         # select a namespace: only a unique, verified name resolution may do so.
         async def resolve_kind(candidate: MediaKind) -> _Identified:
@@ -4204,26 +4222,48 @@ async def _identify_with_fallback(
                 guess_evidence, candidate, root, file, is_disc=is_disc
             )
             return await _resolve_by_name(
-                media_service, candidate, file, cache, episodes_cache, evidence,
-                duration_seconds=spec.duration_seconds if spec else duration_seconds, hint=hint,
+                media_service,
+                candidate,
+                file,
+                cache,
+                episodes_cache,
+                evidence,
+                duration_seconds=spec.duration_seconds if spec else duration_seconds,
+                hint=hint,
             )
 
         results = await asyncio.gather(*(resolve_kind(k) for k in (MediaKind.MOVIE, MediaKind.TV)))
         matches = [r for r in results if r.item is not None]
         if len(matches) == 1:
             result = matches[0]
-            return await _with_unit(media_service, file, result) if result.item.kind == "tv" else result
+            return (
+                await _with_unit(media_service, file, result)
+                if result.item.kind == "tv"
+                else result
+            )
         # Unknown shape stays a playable provisional video, not a fake movie.
         identity = await asyncio.to_thread(
-            build_local_identity, library_id=library.id, kind=MediaKind.VIDEO,
-            root=root, file=file, spec=spec, evidence=None, is_disc=is_disc, scraped=True,
+            build_local_identity,
+            library_id=library.id,
+            kind=MediaKind.VIDEO,
+            root=root,
+            file=file,
+            spec=spec,
+            evidence=None,
+            is_disc=is_disc,
+            scraped=True,
         )
-        item = await media_service.ensure_local_item(MediaKind.VIDEO, identity, library_id=library.id)
+        item = await media_service.ensure_local_item(
+            MediaKind.VIDEO, identity, library_id=library.id
+        )
         return replace(
             _Identified.from_message(
                 stored_fields("library.identification.unparsable"),
                 code=UnidentifiedCode.AMBIGUOUS if matches else UnidentifiedCode.NO_MATCH,
-            ), item=item, source=IdentitySource.LOCAL, provisional=True,
+            ),
+            item=item,
+            source=IdentitySource.LOCAL,
+            provisional=True,
         )
     evidence: LocalEvidence | None = None
     if spec is not None:

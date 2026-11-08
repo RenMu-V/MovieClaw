@@ -329,7 +329,7 @@ export interface OrganizePreview {
 /** 库内一个媒体条目的库存聚合（单库海报墙的一格）。 */
 export interface LibraryItem {
   media_item_id: number;
-  kind: LibraryKind;
+  kind: Exclude<LibraryKind, "mixed">;
   /** 这一格属于哪个库。单库墙上恒等于那个库；跨库合集里每一格各归各的 */
   library_id: number | null;
   /** 身份来源：local=其他库条目，或影视库里尚未识别、按文件名展示的临时条目 */

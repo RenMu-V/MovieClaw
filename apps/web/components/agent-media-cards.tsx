@@ -52,6 +52,7 @@ import { useTapGuard } from "@/lib/use-tap-guard";
 
 /** 媒体类型的图标与文案（与媒体库页同款，此处内联避免把整个 library-view 拉进会话页）。 */
 const KIND_META: Record<LibraryKind, { labelKey: AppMessageKey; Icon: typeof FilmIcon }> = {
+  mixed: { labelKey: "library.kind.mixed", Icon: FilmIcon },
   movie: { labelKey: "media.kind.movie", Icon: FilmIcon },
   tv: { labelKey: "media.kind.tv", Icon: TvIcon },
   video: { labelKey: "library.kind.other", Icon: VideoIcon },

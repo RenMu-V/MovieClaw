@@ -1,4 +1,5 @@
 """Mixed is a library scope, never a TMDB media namespace."""
+
 from pathlib import Path
 
 from movieclaw_api.schemas.library import LibraryPayload
@@ -9,7 +10,7 @@ from movieclaw_media.models import MediaKind
 def test_mixed_wizard_has_explicit_copy():
     root = Path(__file__).parents[2]
     text = (root / "apps/web/components/library-form-dialog.tsx").read_text()
-    assert 'mixed: {' in text
+    assert "mixed: {" in text
     assert "电影与剧集同库" in text
 
 
@@ -21,3 +22,14 @@ def test_mixed_library_payload_and_capabilities():
     assert profile.jellyfin_collection == ""
     assert "mixed" in {p["kind"] for p in library_kind_options()}
     assert "mixed" not in {kind.value for kind in MediaKind}
+
+
+def test_mixed_disables_unsupported_automatic_delivery():
+    assert not profile_for("mixed").subscribable
+
+
+def test_movie_nfo_overrides_episode_shaped_filename(tmp_path):
+    from movieclaw_api.services.library.scan import _mixed_entry_kind
+
+    (tmp_path / "movie.nfo").write_text("<movie><tmdbid>200</tmdbid></movie>")
+    assert _mixed_entry_kind(tmp_path, tmp_path / "Feature.S01E01.mkv") == MediaKind.MOVIE

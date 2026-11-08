@@ -83,6 +83,7 @@
     "otherVideoCount": " · {count, plural, one {# other video} other {# other videos}}"
   },
   "kind": {
+    "mixed": "Mixed content",
     "other": "Other",
     "movies": "movies",
     "series": "series",

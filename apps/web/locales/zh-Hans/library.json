@@ -83,6 +83,7 @@
     "otherVideoCount": " · {count} 个其他视频"
   },
   "kind": {
+    "mixed": "混合内容",
     "other": "其他",
     "movies": "电影",
     "series": "剧集",

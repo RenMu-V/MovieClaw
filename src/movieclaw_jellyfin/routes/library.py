@@ -855,6 +855,7 @@ async def _query_items(request: Request, scope: ViewerScope) -> JSONResponse:
             # 叶子型库（电影/其他）且请求的类型与库一致才走 SQL 分页快路径
             can_page_movies = (
                 library is not None
+                and library.kind != "mixed"
                 and is_leaf_kind(library.kind)
                 and include_types in (set(), {item_type_of(library.kind)})
             )
@@ -1363,8 +1364,14 @@ async def _entries_for_parent(
         effective_recursive = recursive
         if include_types and recursive is None:
             effective_recursive = True
-        default_types = {item_type_of(library.kind)}
-        all_types = default_types if is_leaf_kind(library.kind) else {"Series", "Season", "Episode"}
+        if library.kind == "mixed":
+            default_types = {"Movie", "Series", "Video"}
+            all_types = default_types | {"Season", "Episode"}
+        else:
+            default_types = {item_type_of(library.kind)}
+            all_types = (
+                default_types if is_leaf_kind(library.kind) else {"Series", "Season", "Episode"}
+            )
         if effective_recursive:
             types = include_types or all_types
         else:

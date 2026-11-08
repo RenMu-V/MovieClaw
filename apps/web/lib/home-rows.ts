@@ -66,7 +66,7 @@ export interface HomeUiPrefs {
   rows: HomeRowPref[];
 }
 
-export type HomeLibraryKind = "movie" | "tv" | "video" | "photo";
+export type HomeLibraryKind = "movie" | "tv" | "video" | "photo" | "mixed";
 
 /** 能做「按类型」跨库行的库类型。照片库不做：照片墙是时间线 + 瀑布流，另一种形态。 */
 export type HomeMediaKind = "movie" | "tv" | "video";

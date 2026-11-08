@@ -1761,7 +1761,8 @@ def library_view_dto(
     # Jellyfin 浏览请求扫描 library_file 全表。
     dto["ChildCount"] = library.stats_item_count
     dto["RecursiveItemCount"] = (
-        library.stats_item_count if is_leaf_kind(library.kind) else library.stats_episode_count
+        library.stats_item_count if library.kind == "mixed" or is_leaf_kind(library.kind)
+        else library.stats_episode_count
     )
     # 库视图不做已看聚合（CollectionFolder.SupportsPlayedStatus=false）
     guid = library_guid(library.id)

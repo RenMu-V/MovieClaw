@@ -35,12 +35,12 @@ jobs:
           shm-size: 2g
           push: true
           tags: |
-            shenmu/movieclaw:arm64-library-cover-${{ github.sha }}
-            ghcr.io/renmu-v/movieclaw:arm64-library-cover-${{ github.sha }}
+            shenmu/movieclaw:arm64-mixed-${{ github.sha }}
+            ghcr.io/renmu-v/movieclaw:arm64-mixed-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/RenMu-V/MovieClaw
             org.opencontainers.image.revision=${{ github.sha }}
-            de.sttss.movieclaw.base_revision=8e0a58a3c21e2470faa3dfbda8aa2980ab819377
+            de.sttss.movieclaw.base_revision=961123d73a30256acf8a0a1177843e8c3833e2c8
       - name: Verify pushed artifact
         env:
           IMAGE: shenmu/movieclaw@${{ steps.build.outputs.digest }}
