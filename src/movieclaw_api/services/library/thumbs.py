@@ -140,7 +140,7 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
         poster_ready = meta.poster_file == poster_rel and await asyncio.to_thread(
             poster_dest.is_file
         )
-        if force or not poster_ready:
+        if (force or not poster_ready) and not meta.poster_locked:
             async with FRAME_GRAB_GATE:
                 size = await asyncio.to_thread(
                     build_thumbnail,
@@ -161,7 +161,7 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
         backdrop_ready = meta.backdrop_file == backdrop_rel and await asyncio.to_thread(
             backdrop_dest.is_file
         )
-        if force or not backdrop_ready:
+        if (force or not backdrop_ready) and not meta.backdrop_locked:
             if await asyncio.to_thread(build_backdrop, video, backdrop_dest):
                 meta.backdrop_file = backdrop_rel
                 changed = True

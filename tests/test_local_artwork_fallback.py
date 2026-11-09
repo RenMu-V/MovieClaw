@@ -87,6 +87,9 @@ async def test_local_identity_automatically_gets_only_missing_images(tmp_path, m
             poster = tmp_path / "assets" / (meta.poster_file or 'absent')
             original = poster.read_bytes() if poster.is_file() else None
         await media_scrape.ensure_assets(item_id)
+        if scenario == 'locked':
+            Image.new('RGB', (90, 130), 'red').save(tmp_path / 'poster.jpg')
+            await thumbs.ensure_local_assets(item_id, force=True)
         if original:
             assert poster.read_bytes() == original
         assert calls == ([] if scenario in ('offline', 'no_id', 'plain_id', 'local_images', 'locked') else [f"/3/{kind}/42"])
