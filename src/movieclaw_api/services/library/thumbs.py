@@ -192,7 +192,14 @@ async def ensure_local_assets(media_item_id: int, *, force: bool = False) -> Non
         if changed:
             meta.updated_at = utcnow()
             session.add(meta)
-            await session.commit()
+        # Persist the new empty asset row too: an image-less NFO item has no
+        # local changes, but the subsequent image-only fallback needs that row.
+        await session.commit()
+
+    # Network work stays outside the local ingestion transaction and uses the
+    # existing scan/watch/refresh asset workers. NFO text/identity never changes.
+    from movieclaw_api.services.library.local_artwork import ensure_remote_images
+    await ensure_remote_images(media_item_id, video, library, force=force)
 
 
 def build_thumbnail(

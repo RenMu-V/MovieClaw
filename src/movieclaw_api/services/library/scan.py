@@ -3994,6 +3994,10 @@ async def _collect_and_prefetch(
     known: dict[str, LibraryFile],
 ) -> None:
     """_prefetch_profiles 的正题：挑出该拉的 id 并发拉回来。"""
+    # Mixed is a library container, never a provider namespace. Concrete
+    # identification below owns movie/tv fetches; avoid /mixed/{id} prefetch.
+    if kind.value == "mixed":
+        return
     wanted: set[int] = set()
     for root_path, file, _is_disc in window:
         existing = known.get(str(file))
