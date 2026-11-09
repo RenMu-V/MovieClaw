@@ -74,7 +74,9 @@ async def ensure_remote_images(item_id: int, video: Path, library, *, force: boo
             await asyncio.to_thread(scrape._atomic_write, state_file, json.dumps(retry).encode())
             try:
                 async with _GATE:
-                    profile = await get_tmdb_client().get(f'{item.kind}/{tmdb_id}')
+                    from movieclaw_api.services.scrape_config import effective_languages
+                    setting = await scrape.scrape_setting_for_item(session, item)
+                    profile = await get_tmdb_client().get(f'{item.kind}/{tmdb_id}', {'language': effective_languages(setting)[0]})
                     names = {normalize_title(profile.get(k) or '') for k in ('title', 'original_title', 'name', 'original_name')}
                     local_names = {normalize_title(v) for v in (item.title, item.original_title) if v}
                     date = profile.get('release_date' if item.kind == 'movie' else 'first_air_date') or ''
